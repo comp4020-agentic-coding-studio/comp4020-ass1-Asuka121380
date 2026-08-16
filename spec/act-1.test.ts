@@ -21,6 +21,7 @@ import {
   selectableTargets,
   startExhibition,
 } from "../src/exhibition-state";
+import { annotationForStep } from "../src/annotations";
 import {
   isBarStart,
   nextSlotIndex,
@@ -177,6 +178,61 @@ describe("exhibition state — Act I", () => {
     const state = startExhibition();
     const after = selectTarget(state, BEAT_ONE_INDEX);
     expect(after).toEqual(state);
+  });
+});
+
+describe("annotations — Act I", () => {
+  it("shows no annotation on the title screen or while listening", () => {
+    expect(annotationForStep({ screen: "title" })).toBeNull();
+    expect(annotationForStep(startExhibition())).toBeNull();
+  });
+
+  it("shows annotation 1 upper-left after two bars of listening", () => {
+    const state = advanceBar(advanceBar(startExhibition()));
+    const annotation = annotationForStep(state);
+    expect(annotation?.id).toBe("annotation-1");
+    expect(annotation?.position).toBe("upper-left");
+  });
+
+  it("shows annotation 2 upper-right with 'flat' underlined", () => {
+    let state = startExhibition();
+    state = advanceBar(advanceBar(state));
+    state = advanceBar(state);
+    const annotation = annotationForStep(state);
+    expect(annotation?.id).toBe("annotation-2");
+    expect(annotation?.position).toBe("upper-right");
+    expect(annotation?.underlineWord).toBe("flat");
+  });
+
+  it("shows annotation 3 lower-left with arrows to beats 1 and 3", () => {
+    let state = startExhibition();
+    state = advanceBar(advanceBar(state));
+    state = advanceBar(advanceBar(state));
+    const annotation = annotationForStep(state);
+    expect(annotation?.id).toBe("annotation-3");
+    expect(annotation?.position).toBe("lower-left");
+    expect(annotation?.arrowTargets).toEqual([BEAT_ONE_INDEX, BEAT_THREE_INDEX]);
+  });
+
+  it("shows 'next bar…' once both targets are selected", () => {
+    let state = startExhibition();
+    state = advanceBar(advanceBar(state));
+    state = advanceBar(advanceBar(state));
+    state = selectTarget(state, BEAT_ONE_INDEX);
+    state = selectTarget(state, BEAT_THREE_INDEX);
+    const annotation = annotationForStep(state);
+    expect(annotation?.id).toBe("next-bar");
+    expect(annotation?.lines).toEqual(["next bar…"]);
+  });
+
+  it("shows no annotation once Act I has settled", () => {
+    let state = startExhibition();
+    state = advanceBar(advanceBar(state));
+    state = advanceBar(advanceBar(state));
+    state = selectTarget(state, BEAT_ONE_INDEX);
+    state = selectTarget(state, BEAT_THREE_INDEX);
+    state = advanceBar(state);
+    expect(annotationForStep(state)).toBeNull();
   });
 });
 

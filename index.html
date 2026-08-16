@@ -39,7 +39,15 @@
 
       <section class="score-stage" data-testid="score-stage">
         <p class="act-label">Act I · Pulse</p>
-        <div class="staff" data-testid="staff"></div>
+        <div class="staff-frame" data-testid="staff-frame">
+          <div class="staff" data-testid="staff"></div>
+          <div class="hit-targets" data-testid="hit-targets"></div>
+          <div
+            class="annotation-layer"
+            data-testid="annotation-layer"
+            aria-live="polite"
+          ></div>
+        </div>
         <p class="beat-labels" aria-hidden="true">1 &amp; 2 &amp; 3 &amp; 4 &amp;</p>
         <div class="playback-controls">
           <button

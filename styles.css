@@ -173,9 +173,121 @@ nav {
   text-transform: uppercase;
 }
 
-.staff {
+.staff-frame {
+  position: relative;
   width: min(100%, 900px);
   height: clamp(140px, 25vh, 220px);
+}
+
+.staff,
+.hit-targets,
+.annotation-layer,
+.annotation-arrows {
+  position: absolute;
+  inset: 0;
+}
+
+.hit-targets,
+.annotation-layer,
+.annotation-arrows {
+  pointer-events: none;
+}
+
+.beat-target {
+  position: absolute;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.beat-target::before {
+  content: "";
+  width: 80%;
+  height: 80%;
+  border: 2px solid var(--pencil-blue);
+  border-radius: 48% 52% 51% 49% / 52% 48% 50% 50%;
+  opacity: 0.55;
+  transform: rotate(-3deg);
+  transition: opacity 200ms ease, border-color 200ms ease;
+}
+
+.beat-target-active {
+  display: flex;
+}
+
+.beat-target:hover::before,
+.beat-target:focus-visible::before {
+  opacity: 0.85;
+}
+
+.beat-target-selected::before {
+  border-color: var(--ink);
+  border-style: solid;
+  opacity: 0.9;
+  transform: rotate(2deg);
+}
+
+.annotation-note {
+  position: absolute;
+  max-width: min(60vw, 20rem);
+  margin: 0;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  color: var(--graphite);
+  font-size: clamp(1rem, 2.2vw, 1.35rem);
+  line-height: 1.35;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.annotation-pos-upper-left {
+  top: 0;
+  left: 0;
+}
+
+.annotation-pos-upper-right {
+  top: 0;
+  right: 0;
+  text-align: right;
+}
+
+.annotation-pos-lower-left {
+  bottom: 0;
+  left: 0;
+}
+
+.annotation-note-visible {
+  opacity: 1;
+}
+
+.annotation-underline {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+.annotation-underline-path {
+  fill: none;
+  stroke: var(--pencil-blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 550ms ease;
+}
+
+.annotation-arrow-path {
+  fill: none;
+  stroke: var(--pencil-blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms ease;
 }
 
 .beat-labels {
@@ -215,14 +327,58 @@ nav {
 }
 
 @media (width <= 780px) {
-  .staff {
+  .staff-frame {
     height: clamp(110px, 20vh, 170px);
+  }
+
+  .annotation-note {
+    max-width: 100%;
+    width: 100%;
+    padding: 0.5rem clamp(0.5rem, 4vw, 1rem);
+    text-align: center;
+  }
+
+  .annotation-pos-upper-left,
+  .annotation-pos-upper-right {
+    top: -3.25rem;
+    right: 0;
+    left: 0;
+    text-align: center;
+  }
+
+  .annotation-pos-lower-left {
+    bottom: -3.25rem;
+    right: 0;
+    left: 0;
+    text-align: center;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .title-screen,
-  .score-stage {
+  .score-stage,
+  .annotation-note {
     transition-duration: 1ms;
   }
+
+  .annotation-underline-path,
+  .annotation-arrow-path,
+  .beat-target::before {
+    transition: none;
+  }
+}
+
+/* JS-driven mirror of the media query above (src/motion.ts toggles this
+   class on <html> so annotation draw-on choreography can be skipped
+   outright rather than merely shortened — see main.ts). */
+html.reduced-motion .title-screen,
+html.reduced-motion .score-stage,
+html.reduced-motion .annotation-note {
+  transition-duration: 1ms;
+}
+
+html.reduced-motion .annotation-underline-path,
+html.reduced-motion .annotation-arrow-path,
+html.reduced-motion .beat-target::before {
+  transition: none;
 }

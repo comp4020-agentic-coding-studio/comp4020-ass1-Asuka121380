@@ -16,8 +16,19 @@ import type { RhythmPattern } from "./rhythm-model";
 const NOTEHEAD_KEY = "b/4";
 const INK_COLOR = "#25231f";
 
+export interface NoteBox {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
 export interface ScoreHandles {
   readonly svg: SVGSVGElement;
+  // One box per slot in `pattern.voices[0].slots`, in the same pixel space as
+  // `container` — the hit-target/annotation overlay layers in main.ts use
+  // these to position themselves over the actual noteheads VexFlow drew.
+  readonly noteBoxes: readonly NoteBox[];
   destroy(): void;
 }
 
@@ -59,6 +70,8 @@ export function renderPulseScore(
     return note;
   });
 
+  let noteBoxes: NoteBox[] = [];
+
   if (notes.length > 0) {
     const voice = new Voice({
       numBeats: pattern.beatsPerBar,
@@ -75,6 +88,27 @@ export function renderPulseScore(
     new Formatter().joinVoices([voice]).formatToStave([voice], stave);
     voice.draw(context, stave);
     beam.setContext(context).draw();
+
+    // getBoundingBox() needs canvas glyph-metrics that jsdom doesn't provide
+    // (and can be surprisingly tight in a real browser too, given the brief
+    // asks for *large* hit areas). Build a generous box instead: full stave
+    // height, spanning the midpoint between each note and its neighbours —
+    // both come from tick-context x-positions and fixed stave-line geometry,
+    // neither of which touches text measurement.
+    const HIT_BOX_ABOVE_STAVE = 20;
+    const HIT_BOX_BELOW_STAVE = 10;
+    const boxTop = stave.getYForLine(0) - HIT_BOX_ABOVE_STAVE;
+    const boxHeight =
+      stave.getYForLine(4) + HIT_BOX_BELOW_STAVE - boxTop;
+
+    const xs = notes.map((note) => note.getAbsoluteX());
+    noteBoxes = xs.map((x, index) => {
+      const gapBefore = index > 0 ? x - xs[index - 1] : xs[1] - xs[0];
+      const gapAfter =
+        index < xs.length - 1 ? xs[index + 1] - x : x - xs[index - 1];
+      const halfWidth = Math.min(gapBefore, gapAfter) / 2;
+      return { x: x - halfWidth, y: boxTop, w: halfWidth * 2, h: boxHeight };
+    });
   }
 
   const svg = container.querySelector("svg");
@@ -82,6 +116,7 @@ export function renderPulseScore(
 
   return {
     svg,
+    noteBoxes,
     destroy() {
       container.replaceChildren();
     },

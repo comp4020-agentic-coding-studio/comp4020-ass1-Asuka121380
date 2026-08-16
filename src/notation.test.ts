@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
+  createEmptyStavePattern,
   createPulsePattern,
   withAccentsAt,
 } from "./rhythm-model";
@@ -50,6 +51,24 @@ describe("notation — Act I score", () => {
       withAccentsAt(createPulsePattern(), [BEAT_ONE_INDEX, BEAT_THREE_INDEX]),
     ).svg;
     expect(countAccentGlyphs(accented)).toBe(2);
+  });
+
+  it("exposes one note bounding box per slot, in draw order", () => {
+    const { noteBoxes } = renderPulseScore(stageDiv(), createPulsePattern());
+    expect(noteBoxes.length).toBe(8);
+    for (const box of noteBoxes) {
+      expect(box.w).toBeGreaterThan(0);
+      expect(box.h).toBeGreaterThan(0);
+    }
+    // Beat 3 sits to the right of beat 1 on the stave.
+    expect(noteBoxes[BEAT_THREE_INDEX].x).toBeGreaterThan(
+      noteBoxes[BEAT_ONE_INDEX].x,
+    );
+  });
+
+  it("exposes no note boxes for the empty title-screen stave", () => {
+    const { noteBoxes } = renderPulseScore(stageDiv(), createEmptyStavePattern());
+    expect(noteBoxes.length).toBe(0);
   });
 
   it("destroy() clears the container", () => {
