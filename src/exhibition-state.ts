@@ -4,16 +4,20 @@ import {
   BEAT_TWO_INDEX,
   BEAT_FOUR_INDEX,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_AFTER_BEAT_THREE_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
   BASIC_KICK_INDICES,
   OFFBEAT_KICK_INDICES,
   SYNCOPATED_KICK_INDICES,
   LOCK_BASS_INDICES,
   ANSWER_BASS_INDICES,
+  POCKET_SHIFTED_LOW_INDICES,
+  POCKET_FINAL_KICK_INDICES,
+  POCKET_FINAL_BASS_INDICES,
   type EighthIndex,
 } from "./rhythm-model";
 
-export type ActId = "act-1" | "act-2" | "act-3" | "act-4";
-// Extension seam for later passes: | "act-5"
+export type ActId = "act-1" | "act-2" | "act-3" | "act-4" | "act-5";
 
 export type Act1Step =
   | "listening"
@@ -96,6 +100,41 @@ export type Act4Step =
   | "final-2"
   | "settled";
 
+// Act V (EXHIBITION_FLOW.md section 10): begins directly from Act IV's Lock
+// mode, so there is no separate entry pattern to build. "annotation-2"/
+// "annotation-2b" and "annotation-4"/"annotation-4b" are the same two-part
+// split established by Act III's/Act IV's own "Then:"/"After another bar:"
+// annotation copy. The kick-call/bass-answer conversation is a strictly
+// sequential guided move (the bass target only becomes selectable once the
+// kick call has actually landed at a barline), so it gets its own pair of
+// queued/listening steps either side of "annotation-4c" rather than the
+// simultaneous multi-target selection Act I's annotation-3 uses.
+export type Act5Step =
+  | "entry-listening"
+  | "annotation-1"
+  | "annotation-2"
+  | "annotation-2b"
+  | "move-low-queued"
+  | "space-listening"
+  | "annotation-3"
+  | "annotation-4"
+  | "annotation-4b"
+  | "call-queued"
+  | "call-listening"
+  | "annotation-4c"
+  | "answer-queued"
+  | "conversation-listening"
+  | "annotation-5"
+  | "compare-prompt-full"
+  | "full-performance-queued"
+  | "full-performance-listening"
+  | "final-1"
+  | "final-2"
+  | "final-3"
+  | "final-4"
+  | "final-5"
+  | "settled";
+
 export interface TitleScreen {
   readonly screen: "title";
 }
@@ -129,7 +168,19 @@ export interface Act4Screen {
   readonly barsInStep: number;
 }
 
-export type ExhibitionScreen = Act1Screen | Act2Screen | Act3Screen | Act4Screen;
+export interface Act5Screen {
+  readonly screen: "exhibition";
+  readonly act: "act-5";
+  readonly step: Act5Step;
+  readonly barsInStep: number;
+}
+
+export type ExhibitionScreen =
+  | Act1Screen
+  | Act2Screen
+  | Act3Screen
+  | Act4Screen
+  | Act5Screen;
 
 export type ExhibitionState = TitleScreen | ExhibitionScreen;
 
@@ -178,6 +229,18 @@ const ACT4_BARS_BEFORE_ANNOTATION_2 = 2;
 const ACT4_SHORT_HOLD = 1;
 const ACT4_BARS_ANSWER_LISTENING = 2;
 
+// Act V's own pacing (EXHIBITION_FLOW.md section 10): "after two entry bars"
+// and "after two intermediate bars" mirror the two-bar settle-ins every
+// earlier act uses before its first guided move; "after one additional bar"
+// beats reuse the same 1-bar short hold. The full-performance reveal plays
+// "four complete bars" before the closing teaching copy begins.
+const ACT5_BARS_ENTRY = 2;
+const ACT5_BARS_BEFORE_ANNOTATION_2 = 2;
+const ACT5_SHORT_HOLD = 1;
+const ACT5_BARS_SPACE_LISTENING = 2;
+const ACT5_BARS_CONVERSATION_LISTENING = 2;
+const ACT5_FULL_PERFORMANCE_BARS = 4;
+
 export function startExhibition(): ExhibitionState {
   return {
     screen: "exhibition",
@@ -221,6 +284,19 @@ function startAct4(): ExhibitionState {
   };
 }
 
+// Act V begins directly from Act IV's Lock mode — the kick and bass patterns
+// already in place (SYNCOPATED_KICK_INDICES/LOCK_BASS_INDICES, forced back
+// into place by Act IV's "final-1") need no re-orchestration
+// (EXHIBITION_FLOW.md section 10, "Entry state").
+function startAct5(): ExhibitionState {
+  return {
+    screen: "exhibition",
+    act: "act-5",
+    step: "entry-listening",
+    barsInStep: 0,
+  };
+}
+
 // Every act must let the visitor return to the title screen (never a
 // forward "Next") — this is the reusable transition later acts' own
 // back-navigation will call, alongside Act I's.
@@ -243,6 +319,20 @@ export function selectableTargets(
   if (state.act === "act-3" && state.step === "annotation-4") {
     // Annotation 4's guided move: add the kick on beat 4.
     return new Set([BEAT_FOUR_INDEX]);
+  }
+  if (state.act === "act-5" && state.step === "annotation-2b") {
+    // Annotation 2b's guided move: shift the crowded low pair off beat 4
+    // onto the offbeat after it (EXHIBITION_FLOW.md section 10).
+    return new Set([OFFBEAT_AFTER_BEAT_FOUR_INDEX]);
+  }
+  if (state.act === "act-5" && state.step === "annotation-4b") {
+    // Annotation 4b's first stage: add the kick call on beat 3.
+    return new Set([BEAT_THREE_INDEX]);
+  }
+  if (state.act === "act-5" && state.step === "annotation-4c") {
+    // Annotation 4b's second stage, revealed only once the kick call has
+    // landed: add the bass answer on the following offbeat.
+    return new Set([OFFBEAT_AFTER_BEAT_THREE_INDEX]);
   }
   return new Set();
 }
@@ -425,7 +515,104 @@ export function advanceBar(state: ExhibitionState): ExhibitionState {
           ? { ...state, step: "settled", barsInStep: 0 }
           : { ...state, barsInStep };
       case "settled":
-        // Extension seam for Act V (Milestone 5).
+        return startAct5();
+    }
+  }
+
+  if (state.act === "act-5") {
+    switch (state.step) {
+      case "entry-listening":
+        return barsInStep >= ACT5_BARS_ENTRY
+          ? { ...state, step: "annotation-1", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-1":
+        return barsInStep >= ACT5_BARS_BEFORE_ANNOTATION_2
+          ? { ...state, step: "annotation-2", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-2":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "annotation-2b", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-2b":
+        // Waits on selectTarget(OFFBEAT_AFTER_BEAT_FOUR_INDEX), not on bar
+        // count.
+        return { ...state, barsInStep };
+      case "move-low-queued":
+        // Any bar boundary while queued applies POCKET_SHIFTED_LOW_INDICES to
+        // both the kick and bass voices (main.ts) and begins the "two bars"
+        // listening hold before annotation-3.
+        return { ...state, step: "space-listening", barsInStep: 0 };
+      case "space-listening":
+        return barsInStep >= ACT5_BARS_SPACE_LISTENING
+          ? { ...state, step: "annotation-3", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-3":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "annotation-4", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-4":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "annotation-4b", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-4b":
+        // Waits on selectTarget(BEAT_THREE_INDEX), not on bar count.
+        return { ...state, barsInStep };
+      case "call-queued":
+        // Applies the kick call on beat 3 (POCKET_FINAL_KICK_INDICES) and
+        // holds briefly so the visitor hears it before the answer target
+        // appears.
+        return { ...state, step: "call-listening", barsInStep: 0 };
+      case "call-listening":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "annotation-4c", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-4c":
+        // Waits on selectTarget(OFFBEAT_AFTER_BEAT_THREE_INDEX), not on bar
+        // count.
+        return { ...state, barsInStep };
+      case "answer-queued":
+        // Applies the bass answer on the offbeat after beat 3
+        // (POCKET_FINAL_BASS_INDICES) and begins its own listening hold.
+        return { ...state, step: "conversation-listening", barsInStep: 0 };
+      case "conversation-listening":
+        return barsInStep >= ACT5_BARS_CONVERSATION_LISTENING
+          ? { ...state, step: "annotation-5", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-5":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "compare-prompt-full", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "compare-prompt-full":
+        // Waits on triggerFullPerformance(), not on bar count.
+        return { ...state, barsInStep };
+      case "full-performance-queued":
+        return { ...state, step: "full-performance-listening", barsInStep: 0 };
+      case "full-performance-listening":
+        return barsInStep >= ACT5_FULL_PERFORMANCE_BARS
+          ? { ...state, step: "final-1", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-1":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "final-2", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-2":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "final-3", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-3":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "final-4", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-4":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "final-5", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-5":
+        return barsInStep >= ACT5_SHORT_HOLD
+          ? { ...state, step: "settled", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "settled":
+        // Extension seam for the laboratory (Milestone 6).
         return state;
     }
   }
@@ -503,6 +690,19 @@ export function selectTarget(
     }
     if (state.step === "annotation-4" && index === BEAT_FOUR_INDEX) {
       return { ...state, step: "add-beat-4-queued", barsInStep: 0 };
+    }
+    return state;
+  }
+
+  if (state.act === "act-5") {
+    if (state.step === "annotation-2b" && index === OFFBEAT_AFTER_BEAT_FOUR_INDEX) {
+      return { ...state, step: "move-low-queued", barsInStep: 0 };
+    }
+    if (state.step === "annotation-4b" && index === BEAT_THREE_INDEX) {
+      return { ...state, step: "call-queued", barsInStep: 0 };
+    }
+    if (state.step === "annotation-4c" && index === OFFBEAT_AFTER_BEAT_THREE_INDEX) {
+      return { ...state, step: "answer-queued", barsInStep: 0 };
     }
     return state;
   }
@@ -757,4 +957,57 @@ export function pendingBassIndicesForStep(
     default:
       return null;
   }
+}
+
+// Which kick-voice indices a queued Act V step applies once its bar boundary
+// lands — mirrors pendingKickIndicesForStep's lockstep convention.
+// "move-low-queued" shifts the crowded low pair off beat 4 for both voices
+// (see pendingAct5BassIndicesForStep's matching case); "call-queued" adds the
+// kick call on beat 3.
+export function pendingAct5KickIndicesForStep(
+  step: Act5Step,
+): readonly EighthIndex[] | null {
+  switch (step) {
+    case "move-low-queued":
+      return POCKET_SHIFTED_LOW_INDICES;
+    case "call-queued":
+      return POCKET_FINAL_KICK_INDICES;
+    default:
+      return null;
+  }
+}
+
+// Which bass-voice indices a queued Act V step applies once its bar boundary
+// lands. "move-low-queued" applies the same shifted low pair as the kick
+// (the two voices move together); "answer-queued" adds the bass answer on
+// the offbeat after beat 3.
+export function pendingAct5BassIndicesForStep(
+  step: Act5Step,
+): readonly EighthIndex[] | null {
+  switch (step) {
+    case "move-low-queued":
+      return POCKET_SHIFTED_LOW_INDICES;
+    case "answer-queued":
+      return POCKET_FINAL_BASS_INDICES;
+    default:
+      return null;
+  }
+}
+
+// The "play the pocket" full-performance reveal (EXHIBITION_FLOW.md section
+// 10) — a one-shot activation, mirroring canTriggerOrchestrate/
+// canTriggerBringInBass exactly.
+export function canTriggerFullPerformance(state: ExhibitionState): boolean {
+  return (
+    state.screen === "exhibition" &&
+    state.act === "act-5" &&
+    state.step === "compare-prompt-full"
+  );
+}
+
+export function triggerFullPerformance(state: ExhibitionState): ExhibitionState {
+  if (!canTriggerFullPerformance(state) || state.screen !== "exhibition" || state.act !== "act-5") {
+    return state;
+  }
+  return { ...state, step: "full-performance-queued", barsInStep: 0 };
 }

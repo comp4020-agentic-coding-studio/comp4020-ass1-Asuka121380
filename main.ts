@@ -11,10 +11,13 @@ import {
   canTriggerCompareAnswer,
   canTriggerCompareBasic,
   canTriggerCompareLock,
+  canTriggerFullPerformance,
   canTriggerOrchestrate,
   canTriggerShiftBass,
   isFlipControlVisible,
   pendingAccentTargetsForStep,
+  pendingAct5BassIndicesForStep,
+  pendingAct5KickIndicesForStep,
   pendingBassIndicesForStep,
   pendingKickIndicesForStep,
   returnToTitle,
@@ -27,6 +30,7 @@ import {
   triggerCompareBasic,
   triggerCompareLock,
   triggerFlip,
+  triggerFullPerformance,
   triggerOrchestrate,
   triggerShiftBass,
   type ActId,
@@ -42,6 +46,8 @@ import {
   BEAT_TWO_INDEX,
   EIGHTH_LABELS,
   LOCK_BASS_INDICES,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
+  OFFBEAT_AFTER_BEAT_THREE_INDEX,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
   addBassVoice,
   applyPendingPattern,
@@ -123,6 +129,9 @@ const compareLockButtonEl = document.querySelector<HTMLButtonElement>(
 const compareAnswerButtonEl = document.querySelector<HTMLButtonElement>(
   '[data-testid="compare-answer"]',
 );
+const playPocketButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="play-pocket"]',
+);
 
 if (
   titleRoot &&
@@ -145,7 +154,8 @@ if (
   bringInBassButtonEl &&
   shiftBassButtonEl &&
   compareLockButtonEl &&
-  compareAnswerButtonEl
+  compareAnswerButtonEl &&
+  playPocketButtonEl
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
@@ -161,6 +171,7 @@ if (
   const shiftBassButton = shiftBassButtonEl;
   const compareLockButton = compareLockButtonEl;
   const compareAnswerButton = compareAnswerButtonEl;
+  const playPocketButton = playPocketButtonEl;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
@@ -178,7 +189,22 @@ if (
   // once the fade-out has actually finished, not on a guessed delay.
   const ANNOTATION_FADE_MS = 700;
 
-  function beatTargetLabel(index: EighthIndex): string {
+  // Index 4 (BEAT_THREE_INDEX) and the two new Act V offbeat indices carry a
+  // different meaning depending on the current act/step, so the label is
+  // derived from live exhibition state rather than being a fixed per-index
+  // lookup (kept in sync on every render via syncBeatTargets).
+  function beatTargetLabel(index: EighthIndex, state: ExhibitionState): string {
+    if (state.screen === "exhibition" && state.act === "act-5") {
+      if (state.step === "annotation-2b" && index === OFFBEAT_AFTER_BEAT_FOUR_INDEX) {
+        return "Move the low pair to the offbeat after beat 4";
+      }
+      if (state.step === "annotation-4b" && index === BEAT_THREE_INDEX) {
+        return "Add the kick call on beat 3";
+      }
+      if (state.step === "annotation-4c" && index === OFFBEAT_AFTER_BEAT_THREE_INDEX) {
+        return "Add the bass answer on the offbeat after beat 3";
+      }
+    }
     switch (index) {
       case BEAT_ONE_INDEX:
         return "Accent beat 1";
@@ -198,7 +224,7 @@ if (
     button.type = "button";
     button.className = "beat-target";
     button.dataset.testid = `beat-target-${index}`;
-    button.setAttribute("aria-label", beatTargetLabel(index));
+    button.setAttribute("aria-label", beatTargetLabel(index, exhibitionState));
     button.setAttribute("aria-pressed", "false");
     button.disabled = true;
     button.addEventListener("click", () => {
@@ -214,6 +240,15 @@ if (
             const withKicks = withKickIndices(rhythmState.currentPattern, kickIndices);
             rhythmState = queuePendingPattern(rhythmState, withKicks);
           }
+        } else if (exhibitionState.act === "act-5") {
+          const kickIndices = pendingAct5KickIndicesForStep(exhibitionState.step);
+          const bassIndices = pendingAct5BassIndicesForStep(exhibitionState.step);
+          if (kickIndices || bassIndices) {
+            let pattern = rhythmState.currentPattern;
+            if (kickIndices) pattern = withKickIndices(pattern, kickIndices);
+            if (bassIndices) pattern = withBassIndices(pattern, bassIndices);
+            rhythmState = queuePendingPattern(rhythmState, pattern);
+          }
         }
       }
       render();
@@ -226,6 +261,8 @@ if (
     [BEAT_THREE_INDEX, createBeatTarget(BEAT_THREE_INDEX)],
     [OFFBEAT_AFTER_BEAT_TWO_INDEX, createBeatTarget(OFFBEAT_AFTER_BEAT_TWO_INDEX)],
     [BEAT_FOUR_INDEX, createBeatTarget(BEAT_FOUR_INDEX)],
+    [OFFBEAT_AFTER_BEAT_THREE_INDEX, createBeatTarget(OFFBEAT_AFTER_BEAT_THREE_INDEX)],
+    [OFFBEAT_AFTER_BEAT_FOUR_INDEX, createBeatTarget(OFFBEAT_AFTER_BEAT_FOUR_INDEX)],
   ]);
   for (const button of beatTargets.values()) hitTargetsContainer.append(button);
 
@@ -724,6 +761,7 @@ if (
       button.classList.toggle("beat-target-active", isSelectable);
       button.classList.toggle("beat-target-selected", isSelected);
       button.setAttribute("aria-pressed", String(isSelected));
+      button.setAttribute("aria-label", beatTargetLabel(index, exhibitionState));
 
       const box = noteBoxes[index];
       if (box) {
@@ -771,6 +809,8 @@ if (
         return "Act III · Kit";
       case "act-4":
         return "Act IV · Relationship";
+      case "act-5":
+        return "Act V · Pocket";
     }
   }
 
@@ -807,6 +847,13 @@ if (
     compareAnswerButton.hidden = !canTriggerCompareAnswer(exhibitionState);
   }
 
+  // Act V's one reveal control (EXHIBITION_FLOW.md section 10: "▶ play the
+  // pocket") — same appear-only-when-invited convention as syncAct3Controls/
+  // syncAct4Controls.
+  function syncAct5Controls(): void {
+    playPocketButton.hidden = !canTriggerFullPerformance(exhibitionState);
+  }
+
   function render(): void {
     // The bass stave (from Act IV) is a second real VexFlow stave drawn
     // below the drum-kit stave — the frame needs extra CSS height before
@@ -834,6 +881,7 @@ if (
     syncFlipControl();
     syncAct3Controls();
     syncAct4Controls();
+    syncAct5Controls();
   }
 
   const titleHandles = initTitleScreen({
@@ -1176,6 +1224,16 @@ if (
         rhythmState = queuePendingPattern(rhythmState, withBass);
       }
     }
+    render();
+  });
+
+  // "▶ play the pocket" (EXHIBITION_FLOW.md section 10) — a one-shot reveal
+  // that simply holds the already-assembled final pattern in place for a
+  // few bars; unlike Act III/IV's reveals, it introduces no new pattern
+  // indices, so no queuePendingPattern call accompanies it.
+  playPocketButton.addEventListener("click", () => {
+    if (playPocketButton.hidden || !canTriggerFullPerformance(exhibitionState)) return;
+    exhibitionState = triggerFullPerformance(exhibitionState);
     render();
   });
 

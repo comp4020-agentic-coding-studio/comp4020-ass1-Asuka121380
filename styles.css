@@ -742,14 +742,15 @@ nav {
 }
 
 /* Same understated temporary-control convention as .flip-accents — live only
-   at the specific Act III/IV step each button corresponds to. */
+   at the specific Act III/IV/V step each button corresponds to. */
 .orchestrate-kit,
 .compare-basic,
 .compare-332,
 .bring-in-bass,
 .shift-bass,
 .compare-lock,
-.compare-answer {
+.compare-answer,
+.play-pocket {
   min-width: 44px;
   min-height: 44px;
   padding: 0.4rem 0.9rem;
@@ -769,7 +770,8 @@ nav {
 .bring-in-bass[hidden],
 .shift-bass[hidden],
 .compare-lock[hidden],
-.compare-answer[hidden] {
+.compare-answer[hidden],
+.play-pocket[hidden] {
   display: none;
 }
 
@@ -786,7 +788,9 @@ nav {
 .compare-lock:hover,
 .compare-lock:focus-visible,
 .compare-answer:hover,
-.compare-answer:focus-visible {
+.compare-answer:focus-visible,
+.play-pocket:hover,
+.play-pocket:focus-visible {
   color: var(--ink);
 }
 
@@ -796,7 +800,8 @@ nav {
 .bring-in-bass:focus-visible,
 .shift-bass:focus-visible,
 .compare-lock:focus-visible,
-.compare-answer:focus-visible {
+.compare-answer:focus-visible,
+.play-pocket:focus-visible {
   outline: 2px dashed var(--ink);
   outline-offset: 2px;
 }

@@ -264,9 +264,13 @@ describe("exhibition state — Act IV bar-boundary sequence", () => {
     expect(state.step).toBe("settled");
   });
 
-  it("settled holds — Act V wiring is a later milestone", () => {
+  it("settled hands off directly into Act V's entry-listening", () => {
     const settled = advanceBar(reachFinal2());
-    expect(advanceBar(settled)).toEqual(settled);
+    const next = advanceBar(settled);
+    if (next.screen !== "exhibition") throw new Error("unreachable");
+    expect(next.act).toBe("act-5");
+    expect(next.step).toBe("entry-listening");
+    expect(next.barsInStep).toBe(0);
   });
 });
 

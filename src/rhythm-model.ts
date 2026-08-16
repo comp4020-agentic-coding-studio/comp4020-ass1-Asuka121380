@@ -37,6 +37,11 @@ export const BEAT_FOUR_INDEX: EighthIndex = 6;
 // The eighth-note slot immediately after beat 2 — Act III's first kick move
 // (EXHIBITION_FLOW.md section 8) pulls the kick from beat 3 onto this slot.
 export const OFFBEAT_AFTER_BEAT_TWO_INDEX: EighthIndex = 3;
+// Act V's two further offbeat slots (EXHIBITION_FLOW.md section 10): the bass
+// answer lands on the first, and the low-voice pickup crossing into the next
+// bar lands on the second.
+export const OFFBEAT_AFTER_BEAT_THREE_INDEX: EighthIndex = 5;
+export const OFFBEAT_AFTER_BEAT_FOUR_INDEX: EighthIndex = 7;
 
 // Printed count row under the staff (EXHIBITION_FLOW.md section 6) — one
 // label per eighth-note slot, positioned against that slot's NoteBox in
@@ -134,6 +139,30 @@ export const SYNCOPATED_KICK_INDICES: readonly EighthIndex[] = [
 // of landing with it.
 export const LOCK_BASS_INDICES: readonly EighthIndex[] = SYNCOPATED_KICK_INDICES;
 export const ANSWER_BASS_INDICES: readonly EighthIndex[] = [1, 4, 7];
+
+// Act V's pocket (EXHIBITION_FLOW.md section 10): moving the crowded low pair
+// off beat 4 onto the offbeat after it applies to both the kick and the bass
+// simultaneously (they stay locked together); the finished groove then adds a
+// kick call on beat 3 and a bass answer on the offbeat after it — each move
+// re-derives only the one voice it actually changes via withKickIndices/
+// withBassIndices, so no new pattern-manipulation function is needed.
+export const POCKET_SHIFTED_LOW_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
+];
+export const POCKET_FINAL_KICK_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  BEAT_THREE_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
+];
+export const POCKET_FINAL_BASS_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_AFTER_BEAT_THREE_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
+];
 
 function drumVoiceSlots(
   instrument: Instrument,

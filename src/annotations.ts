@@ -4,11 +4,19 @@ import {
   BEAT_TWO_INDEX,
   BEAT_FOUR_INDEX,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_AFTER_BEAT_THREE_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
   LOCK_BASS_INDICES,
   ANSWER_BASS_INDICES,
   type EighthIndex,
 } from "./rhythm-model";
-import type { Act2Step, Act3Step, Act4Step, ExhibitionState } from "./exhibition-state";
+import type {
+  Act2Step,
+  Act3Step,
+  Act4Step,
+  Act5Step,
+  ExhibitionState,
+} from "./exhibition-state";
 
 export type AnnotationPosition =
   | "upper-left"
@@ -48,7 +56,21 @@ export interface AnnotationContent {
     | "act4-compare-lock"
     | "act4-compare-answer"
     | "act4-final-1"
-    | "act4-final-2";
+    | "act4-final-2"
+    | "act5-annotation-1"
+    | "act5-annotation-2"
+    | "act5-annotation-2b"
+    | "act5-annotation-3"
+    | "act5-annotation-4"
+    | "act5-annotation-4b"
+    | "act5-annotation-4c"
+    | "act5-annotation-5"
+    | "act5-compare-full"
+    | "act5-final-1"
+    | "act5-final-2"
+    | "act5-final-3"
+    | "act5-final-4"
+    | "act5-final-5";
   readonly position: AnnotationPosition;
   readonly lines: readonly string[];
   // The word within `lines` to underline with a hand-drawn stroke.
@@ -396,6 +418,134 @@ function act4AnnotationForStep(step: Act4Step): AnnotationContent | null {
   }
 }
 
+// EXHIBITION_FLOW.md section 10 (Act V). Annotation 1's two-corner staging
+// ("first line between the two staves; second line beside beat 4 with an
+// arrow") is simplified the same way act2's/act3's own two-corner
+// annotations were above: one position carrying both lines, with an arrow
+// and alignment marks at beat 4 standing in for the "vertically aligned
+// voices" call-out. The hand-drawn arc connecting the kick call to the bass
+// answer (interaction step 4) is drawn once both notes exist, at
+// annotation-5, rather than as a preview beforehand — that mirrors Act III's
+// annotation-3, whose own preview arc points at a target that already exists
+// as a ghost note by that step, unlike here where the bass note doesn't
+// exist until the visitor selects it.
+function act5AnnotationForStep(step: Act5Step): AnnotationContent | null {
+  switch (step) {
+    case "entry-listening":
+      return null;
+    case "annotation-1":
+      return {
+        id: "act5-annotation-1",
+        position: "upper-right",
+        lines: ["Lock feels strong.", "But listen closely to 4."],
+        arrowTargets: [BEAT_FOUR_INDEX],
+        alignmentIndices: [BEAT_FOUR_INDEX],
+      };
+    case "annotation-2":
+      return {
+        id: "act5-annotation-2",
+        position: "upper-right",
+        lines: ["Too much lands on 4."],
+        arrowTargets: [BEAT_FOUR_INDEX],
+        alignmentIndices: [BEAT_FOUR_INDEX],
+      };
+    case "annotation-2b":
+      return {
+        id: "act5-annotation-2b",
+        position: "lower-left",
+        lines: ["Give the snare some room.", "Move the low pair to the \"&\". ↘"],
+        arrowTargets: [OFFBEAT_AFTER_BEAT_FOUR_INDEX],
+      };
+    case "move-low-queued":
+      return NEXT_BAR;
+    case "space-listening":
+      return null;
+    case "annotation-3":
+      return {
+        id: "act5-annotation-3",
+        position: "lower-right",
+        lines: ["Better.", "The backbeat has space to speak."],
+        arrowTargets: [BEAT_FOUR_INDEX],
+      };
+    case "annotation-4":
+      return {
+        id: "act5-annotation-4",
+        position: "upper-left",
+        lines: ["But everything low still agrees."],
+      };
+    case "annotation-4b":
+      return {
+        id: "act5-annotation-4b",
+        position: "lower-left",
+        lines: ["Let the kick call on 3.", "Let the bass answer on the \"&\". ↘"],
+        arrowTargets: [BEAT_THREE_INDEX],
+      };
+    case "call-queued":
+      return NEXT_BAR;
+    case "call-listening":
+      return null;
+    case "annotation-4c":
+      return {
+        id: "act5-annotation-4c",
+        position: "lower-right",
+        lines: ["Let the bass answer on the \"&\". ↘"],
+        arrowTargets: [OFFBEAT_AFTER_BEAT_THREE_INDEX],
+      };
+    case "answer-queued":
+      return NEXT_BAR;
+    case "conversation-listening":
+      return null;
+    case "annotation-5":
+      return {
+        id: "act5-annotation-5",
+        position: "upper-left",
+        lines: ["Hear the whole bar."],
+        arcs: [{ from: BEAT_THREE_INDEX, to: OFFBEAT_AFTER_BEAT_THREE_INDEX }],
+      };
+    case "compare-prompt-full":
+      return {
+        id: "act5-compare-full",
+        position: "lower-left",
+        lines: ["Hear it as one performance.", "▶ play the pocket"],
+      };
+    case "full-performance-queued":
+    case "full-performance-listening":
+      return null;
+    case "final-1":
+      return {
+        id: "act5-final-1",
+        position: "upper-left",
+        lines: ["A groove is not everything", "playing together."],
+      };
+    case "final-2":
+      return {
+        id: "act5-final-2",
+        position: "upper-right",
+        lines: ["It is knowing when to agree—"],
+      };
+    case "final-3":
+      return {
+        id: "act5-final-3",
+        position: "upper-left",
+        lines: ["—and when to answer."],
+      };
+    case "final-4":
+      return {
+        id: "act5-final-4",
+        position: "lower-left",
+        lines: ["Groove is not one pattern.", "It is a relationship."],
+      };
+    case "final-5":
+      return {
+        id: "act5-final-5",
+        position: "lower-right",
+        lines: ["We built this one for you.", "Now move the weight yourself."],
+      };
+    case "settled":
+      return null;
+  }
+}
+
 // One annotation is visible at a time (EXHIBITION_FLOW.md section 4.4): the
 // exhibition step is the single source of truth for what's on screen, so
 // there's nothing else to derive this from.
@@ -411,5 +561,7 @@ export function annotationForStep(state: ExhibitionState): AnnotationContent | n
       return act3AnnotationForStep(state.step);
     case "act-4":
       return act4AnnotationForStep(state.step);
+    case "act-5":
+      return act5AnnotationForStep(state.step);
   }
 }
