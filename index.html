@@ -3,21 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <title>Where the Beat Leans — COMP4020 Assignment 1</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
       <nav aria-label="Primary">
-        <a href="./">Home</a>
+        <button
+          type="button"
+          class="mute-toggle"
+          data-testid="mute-toggle"
+          aria-pressed="false"
+          disabled
+        >
+          sound on
+        </button>
       </nav>
     </header>
-    <main>
-      <h1>COMP4020 prototype</h1>
-      <p data-testid="intro">
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
-      </p>
+    <main class="exhibition">
+      <section class="title-screen" data-testid="title-screen">
+        <div class="title-staff" data-testid="title-staff" aria-hidden="true"></div>
+        <div class="title-copy">
+          <h1 class="title-heading">Where the Beat Leans</h1>
+          <p class="title-subtitle">
+            Eight notes. One bar.<br />
+            Where does the groove come from?
+          </p>
+          <p class="title-sound-note">Sound on. Headphones help.</p>
+          <button type="button" class="start-button" data-testid="start-button">
+            Tap to begin
+          </button>
+          <p class="title-keyboard-hint">or press Enter</p>
+        </div>
+      </section>
+
+      <section class="score-stage" data-testid="score-stage">
+        <p class="act-label">Act I · Pulse</p>
+        <div class="staff" data-testid="staff"></div>
+        <p class="beat-labels" aria-hidden="true">1 &amp; 2 &amp; 3 &amp; 4 &amp;</p>
+        <div class="playback-controls">
+          <button
+            type="button"
+            class="play-pause"
+            data-testid="play-pause"
+            aria-pressed="false"
+            disabled
+          >
+            ▶ play
+          </button>
+        </div>
+      </section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

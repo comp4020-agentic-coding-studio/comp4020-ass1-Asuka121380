@@ -1,16 +1,228 @@
+:root {
+  --paper: #f2e7cc;
+  --paper-light: #f7efd9;
+  --ink: #25231f;
+  --graphite: #746f64;
+  --pencil-blue: #526c7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   margin: 0;
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  color: #1a1a1a;
+  height: 100%;
 }
 
-main {
-  max-width: 40rem;
-  margin: 0 auto;
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.5;
+  overflow: hidden;
 }
 
-a {
-  color: #0b5fff;
+header {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  right: env(safe-area-inset-right, 0);
+  z-index: 10;
+  padding: 0.75rem;
+}
+
+nav {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mute-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--graphite);
+  border-radius: 4px;
+  background: var(--paper-light);
+  color: var(--graphite);
+  font: inherit;
+  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+  cursor: pointer;
+}
+
+.mute-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.exhibition {
+  position: relative;
+  height: 100dvh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.title-screen,
+.score-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.5rem, 2vh, 1.5rem);
+  padding: clamp(1rem, 4vw, 3rem);
+  padding-top: calc(clamp(1rem, 4vw, 3rem) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(clamp(1rem, 4vw, 3rem) + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  transition: opacity 500ms ease;
+}
+
+.title-screen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.title-screen.title-screen-fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.title-staff {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(90%, 640px);
+  height: 160px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.title-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.5rem, 1.5vh, 1rem);
+  max-width: 32rem;
+}
+
+.title-heading {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 3rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.title-subtitle {
+  margin: 0;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: var(--ink);
+}
+
+.title-sound-note {
+  margin: 0;
+  font-size: clamp(0.85rem, 2vw, 1rem);
+  color: var(--graphite);
+  font-style: italic;
+}
+
+.start-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.75rem 2rem;
+  margin-top: 0.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper-light);
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.start-button:hover,
+.start-button:focus-visible {
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+.title-keyboard-hint {
+  margin: 0;
+  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+  color: var(--graphite);
+}
+
+.score-stage {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.score-stage.score-stage-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.act-label {
+  margin: 0;
+  font-size: clamp(0.8rem, 2vw, 1rem);
+  color: var(--graphite);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.staff {
+  width: min(100%, 900px);
+  height: clamp(140px, 25vh, 220px);
+}
+
+.beat-labels {
+  margin: 0;
+  font-size: clamp(0.9rem, 2.5vw, 1.15rem);
+  letter-spacing: 0.3em;
+  color: var(--graphite);
+}
+
+.playback-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.play-pause {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.6rem 1.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper-light);
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  cursor: pointer;
+}
+
+.play-pause:hover,
+.play-pause:focus-visible {
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+.play-pause:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (width <= 780px) {
+  .staff {
+    height: clamp(110px, 20vh, 170px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-screen,
+  .score-stage {
+    transition-duration: 1ms;
+  }
 }

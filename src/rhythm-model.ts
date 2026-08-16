@@ -55,6 +55,19 @@ export function createPulsePattern(tempoBpm = 96): RhythmPattern {
   };
 }
 
+// The title screen's "faint empty staff" (EXHIBITION_FLOW.md section 5) is
+// just a stave/clef/time-signature with no notes — renderPulseScore already
+// draws that correctly when a voice has zero slots.
+export function createEmptyStavePattern(tempoBpm = 96): RhythmPattern {
+  return {
+    id: "title-empty-staff",
+    tempoBpm,
+    beatsPerBar: 4,
+    beatUnit: 4,
+    voices: [{ instrument: "practice-pad", clef: "percussion", slots: [] }],
+  };
+}
+
 export function withAccentsAt(
   pattern: RhythmPattern,
   indices: readonly EighthIndex[],

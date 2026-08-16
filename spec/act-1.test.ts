@@ -8,6 +8,7 @@ import {
   activeInstruments,
   allVelocitiesEqual,
   applyPendingPattern,
+  createEmptyStavePattern,
   createInitialRhythmState,
   createPulsePattern,
   queuePendingPattern,
@@ -84,6 +85,11 @@ describe("rhythm model", () => {
   it("applying with no pending pattern leaves the state unchanged", () => {
     const state = createInitialRhythmState();
     expect(applyPendingPattern(state)).toEqual(state);
+  });
+
+  it("the title screen's empty stave pattern has no slots to notate", () => {
+    const pattern = createEmptyStavePattern();
+    expect(pattern.voices[0].slots.length).toBe(0);
   });
 });
 
