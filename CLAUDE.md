@@ -160,3 +160,41 @@ catching you out, a fact about the stack the agent keeps getting wrong --- write
 it down here. Growing this file is the work of harness engineering, and the gap
 between this boilerplate and your own version is part of what your prototype
 says about the developer you're becoming.
+
+## Facts about this stack that keep coming up
+
+- **No `.ts` extension in relative imports.** This repo's `tsconfig.json` does
+  not set `allowImportingTsExtensions`, so `import { x } from "./content.ts"`
+  fails typecheck with `TS5097`. Write `from "./content"`; Vite resolves it
+  fine.
+- **`stylelint-config-standard` rejects BEM naming.** Its default
+  `selector-class-pattern` is strict kebab-case (`^[a-z]([-a-z0-9]+)?$`), so
+  `__element` and `--modifier` class names (e.g. `.tile__art`,
+  `.alternating-section--reverse`) fail lint outright. Use plain single-dash
+  kebab-case for every class (`.tile-art`, `.alternating-section-reverse`).
+- **Its `media-feature-range-notation` rule wants range syntax.**
+  `@media (max-width: 780px)` fails; write `@media (width <= 780px)` (and
+  `(width >= …)` for min-width) instead.
+- **`no-descending-specificity` cares about *file order*, not just selector
+  shape.** A base class rule must appear before any rule that adds a
+  pseudo-class or extra class to the same element. Group a component's base
+  rules together, then its state/variant rules, in that order --- don't
+  interleave by "which section of the page this affects."
+- **`spec/invariants.test.ts` parses built HTML without running scripts** ---
+  `doc.querySelectorAll("h1").length === 1` sees every `<h1>` in the markup
+  regardless of `hidden` or CSS `display: none`. Never duplicate a semantic
+  landmark merely to support alternate visual states; keep one landmark in
+  the static document and vary content inside it when necessary.
+- **Static tests cannot validate runtime interaction.** Dragging, wheel input,
+  focus order, motion preferences, viewport overflow, computed transforms,
+  and (this project) audio timing and score engraving need a real browser at
+  the two marked viewport sizes. Treat screenshots and observed runtime
+  values as evidence alongside `pnpm check`, not as a substitute for it.
+- **Compose independent transforms on separate elements, not the same one.**
+  When two effects animate the same visual property (position, rotation,
+  scale) on one node, the later write overwrites the earlier one. Give each
+  independent effect its own element in the DOM.
+- **Asset paths are case-sensitive after deployment.** Copy user-supplied
+  media into the repo, reference the committed filename rather than an
+  absolute local path, and verify the exact extension casing in a production
+  build.
