@@ -32,7 +32,9 @@ export interface RhythmState {
 
 export const EIGHTH_COUNT = 8;
 export const BEAT_ONE_INDEX: EighthIndex = 0;
+export const BEAT_TWO_INDEX: EighthIndex = 2;
 export const BEAT_THREE_INDEX: EighthIndex = 4;
+export const BEAT_FOUR_INDEX: EighthIndex = 6;
 
 // Printed count row under the staff (EXHIBITION_FLOW.md section 6) — one
 // label per eighth-note slot, positioned against that slot's NoteBox in
@@ -96,7 +98,7 @@ export function withAccentsAt(
     slots: voice.slots.map((slot, index) =>
       accentSet.has(index as EighthIndex)
         ? { ...slot, accent: true, velocity: ACCENT_VELOCITY }
-        : slot,
+        : { ...slot, accent: false, velocity: BASE_VELOCITY },
     ),
   }));
 

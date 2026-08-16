@@ -61,7 +61,7 @@
       </section>
 
       <section class="score-stage" data-testid="score-stage">
-        <p class="act-label">Act I · Pulse</p>
+        <p class="act-label" data-testid="act-label">Act I · Pulse</p>
         <div class="staff-frame" data-testid="staff-frame">
           <div class="staff" data-testid="staff"></div>
           <div class="hit-targets" data-testid="hit-targets"></div>
@@ -73,6 +73,15 @@
             aria-live="polite"
           ></div>
         </div>
+        <button
+          type="button"
+          class="flip-accents"
+          data-testid="flip-accents"
+          aria-pressed="false"
+          hidden
+        >
+          ↻ flip the accents
+        </button>
         <div class="playback-controls">
           <button
             type="button"

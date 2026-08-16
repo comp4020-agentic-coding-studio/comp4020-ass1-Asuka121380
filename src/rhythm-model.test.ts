@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  BEAT_FOUR_INDEX,
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
+  BEAT_TWO_INDEX,
   EIGHTH_LABELS,
   createPulsePattern,
   withAccentsAt,
@@ -37,5 +39,22 @@ describe("rhythm model — accent contrast", () => {
     expect(accentVelocity / baseVelocity).toBeGreaterThanOrEqual(2.5);
     expect(baseVelocity).toBeGreaterThan(0);
     expect(accentVelocity).toBeLessThanOrEqual(1);
+  });
+
+  it("cleanly swaps the accent set on repeated calls instead of accumulating it", () => {
+    // Act II's flip (EXHIBITION_FLOW.md section 7) repeatedly re-derives the
+    // accent pattern from the same base pattern — 1/3 must fully revert to
+    // base once 2/4 is applied, not stay accented alongside it.
+    const base = createPulsePattern();
+    const onOneAndThree = withAccentsAt(base, [BEAT_ONE_INDEX, BEAT_THREE_INDEX]);
+    const onTwoAndFour = withAccentsAt(onOneAndThree, [BEAT_TWO_INDEX, BEAT_FOUR_INDEX]);
+
+    const slots = onTwoAndFour.voices[0].slots;
+    expect(slots[BEAT_TWO_INDEX].accent).toBe(true);
+    expect(slots[BEAT_FOUR_INDEX].accent).toBe(true);
+    expect(slots[BEAT_ONE_INDEX].accent).toBe(false);
+    expect(slots[BEAT_THREE_INDEX].accent).toBe(false);
+    expect(slots[BEAT_ONE_INDEX].velocity).toBe(slots[1].velocity);
+    expect(slots[BEAT_THREE_INDEX].velocity).toBe(slots[1].velocity);
   });
 });

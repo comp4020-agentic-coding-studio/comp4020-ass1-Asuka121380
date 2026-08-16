@@ -175,13 +175,15 @@ describe("exhibition state — Act I", () => {
     expect(state.step).toBe("queued");
   });
 
-  it("a bar boundary while queued moves the exhibition to settled", () => {
+  it("a bar boundary while queued transitions directly into Act II", () => {
     let state = reachAnnotation3();
     state = selectTarget(state, BEAT_ONE_INDEX);
     state = selectTarget(state, BEAT_THREE_INDEX);
     state = advanceBar(state);
     if (state.screen !== "exhibition") throw new Error("unreachable");
-    expect(state.step).toBe("settled");
+    expect(state.act).toBe("act-2");
+    expect(state.step).toBe("listening");
+    expect(state.barsInStep).toBe(0);
   });
 
   it("selecting a target outside annotation-3 has no effect", () => {
@@ -237,7 +239,7 @@ describe("annotations — Act I", () => {
     expect(annotation?.lines).toEqual(["next bar…"]);
   });
 
-  it("shows no annotation once Act I has settled", () => {
+  it("shows no annotation once Act I has transitioned into Act II's listening step", () => {
     let state = startExhibition();
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));

@@ -5,10 +5,15 @@ import { annotationForStep, type AnnotationContent } from "./src/annotations";
 import {
   ACT1_TARGETS,
   advanceBar,
+  canFlipAccents,
+  isFlipControlVisible,
+  pendingAccentTargetsForStep,
   returnToTitle,
   selectTarget,
   selectableTargets,
   startExhibition,
+  triggerFlip,
+  type ActId,
   type ExhibitionState,
 } from "./src/exhibition-state";
 import { prefersReducedMotion, watchReducedMotion } from "./src/motion";
@@ -16,6 +21,7 @@ import { renderPulseScore, type NoteBox } from "./src/notation";
 import {
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
+  BEAT_TWO_INDEX,
   EIGHTH_LABELS,
   applyPendingPattern,
   createInitialRhythmState,
@@ -66,6 +72,12 @@ const playbackCursor = document.querySelector<HTMLDivElement>(
 const backNavButton = document.querySelector<HTMLButtonElement>(
   '[data-testid="back-nav"]',
 );
+const flipAccentsButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="flip-accents"]',
+);
+const actLabelElQuery = document.querySelector<HTMLParagraphElement>(
+  '[data-testid="act-label"]',
+);
 
 if (
   titleRoot &&
@@ -79,13 +91,17 @@ if (
   startOverButton &&
   beatLabelsContainer &&
   playbackCursor &&
-  backNavButton
+  backNavButton &&
+  flipAccentsButtonEl &&
+  actLabelElQuery
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
   const staffEl = staffContainer;
   const annotationLayer = annotationLayerEl;
   const cursorEl = playbackCursor;
+  const flipAccentsButton = flipAccentsButtonEl;
+  const actLabelEl = actLabelElQuery;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
@@ -206,13 +222,15 @@ if (
     target.append(document.createTextNode(after));
   }
 
+  const ANNOTATION_POSITION_CLASSES = [
+    "annotation-pos-upper-left",
+    "annotation-pos-upper-right",
+    "annotation-pos-lower-left",
+    "annotation-pos-lower-right",
+  ];
+
   function renderAnnotationContent(annotation: AnnotationContent | null): void {
-    annotationNote.classList.remove(
-      "annotation-pos-upper-left",
-      "annotation-pos-upper-right",
-      "annotation-pos-lower-left",
-      "annotation-note-visible",
-    );
+    annotationNote.classList.remove(...ANNOTATION_POSITION_CLASSES, "annotation-note-visible");
     annotationNote.replaceChildren();
     delete annotationNote.dataset.annotationId;
     if (!annotation) return;
@@ -220,8 +238,23 @@ if (
     annotationNote.dataset.annotationId = annotation.id;
     annotationNote.classList.add(`annotation-pos-${annotation.position}`);
     annotation.lines.forEach((line, index) => {
-      if (index > 0) annotationNote.append(document.createElement("br"));
-      appendAnnotationLine(annotationNote, line, annotation.underlineWord);
+      // offsetLines (Act II's "Solid. Square. Grounded.") renders each word
+      // as its own scattered block rather than a single wrapped paragraph,
+      // so no <br> is inserted between them — the block display does that.
+      if (index > 0 && !annotation.offsetLines) {
+        annotationNote.append(document.createElement("br"));
+      }
+      const target = annotation.offsetLines
+        ? annotationNote.appendChild(document.createElement("span"))
+        : annotationNote;
+      if (annotation.offsetLines) target.classList.add("annotation-offset-line");
+      if (index === annotation.smallLineIndex) {
+        const small = target.appendChild(document.createElement("span"));
+        small.classList.add("annotation-small-line");
+        appendAnnotationLine(small, line, annotation.underlineWord);
+      } else {
+        appendAnnotationLine(target, line, annotation.underlineWord);
+      }
     });
     // Next frame, so the browser registers the pre-fade state before the
     // opacity transition runs.
@@ -307,12 +340,7 @@ if (
   // pending crossfade never resolves into a screen that's already gone.
   function resetAnnotationDisplay(): void {
     clearAnnotationFadeTimeout();
-    annotationNote.classList.remove(
-      "annotation-pos-upper-left",
-      "annotation-pos-upper-right",
-      "annotation-pos-lower-left",
-      "annotation-note-visible",
-    );
+    annotationNote.classList.remove(...ANNOTATION_POSITION_CLASSES, "annotation-note-visible");
     annotationNote.replaceChildren();
     delete annotationNote.dataset.annotationId;
     underlineSvg.style.display = "none";
@@ -374,7 +402,7 @@ if (
   function syncBeatTargets(noteBoxes: readonly NoteBox[]): void {
     const selectable = selectableTargets(exhibitionState);
     const selected =
-      exhibitionState.screen === "exhibition"
+      exhibitionState.screen === "exhibition" && exhibitionState.act === "act-1"
         ? exhibitionState.selectedTargets
         : new Set<EighthIndex>();
 
@@ -422,15 +450,40 @@ if (
     cursorEl.classList.add("playback-cursor-active");
   }
 
+  function actLabelText(act: ActId): string {
+    switch (act) {
+      case "act-1":
+        return "Act I · Pulse";
+      case "act-2":
+        return "Act II · Weight";
+    }
+  }
+
+  // The flip control stays hidden until Act II's inversion prompt reveals it,
+  // remains visible (enabled or not) through the A/B comparison, and hides
+  // again once Act II settles (EXHIBITION_FLOW.md section 7).
+  function syncFlipControl(): void {
+    const visible = isFlipControlVisible(exhibitionState);
+    flipAccentsButton.hidden = !visible;
+    if (!visible) return;
+    flipAccentsButton.disabled = !canFlipAccents(exhibitionState);
+    const backbeatAccented =
+      rhythmState.currentPattern.voices[0]?.slots[BEAT_TWO_INDEX]?.accent ?? false;
+    flipAccentsButton.setAttribute("aria-pressed", String(backbeatAccented));
+  }
+
   function render(): void {
     const { noteBoxes } = renderPulseScore(staffEl, rhythmState.currentPattern);
     latestNoteBoxes = noteBoxes;
     if (exhibitionState.screen === "exhibition") {
-      stageEl.dataset.act1Step = exhibitionState.step;
+      stageEl.dataset.act = exhibitionState.act;
+      stageEl.dataset.step = exhibitionState.step;
+      actLabelEl.textContent = actLabelText(exhibitionState.act);
     }
     syncBeatTargets(noteBoxes);
     syncBeatLabels(noteBoxes);
     syncAnnotation(noteBoxes);
+    syncFlipControl();
   }
 
   const titleHandles = initTitleScreen({
@@ -599,11 +652,33 @@ if (
       muteToggle.setAttribute("aria-pressed", "false");
     }
 
-    delete stageEl.dataset.act1Step;
+    delete stageEl.dataset.act;
+    delete stageEl.dataset.step;
     stageEl.classList.remove("score-stage-active");
     titleRoot.classList.remove("title-screen-fading");
     titleHandles.reset();
 
+    render();
+  });
+
+  // Activating the flip queues the accent swap at the next barline rather
+  // than applying it immediately (EXHIBITION_FLOW.md section 7's "Required
+  // interaction: first flip") — same queue-then-apply-on-bar-boundary
+  // mechanism Act I's own accent selection uses.
+  flipAccentsButton.addEventListener("click", () => {
+    if (flipAccentsButton.disabled || !canFlipAccents(exhibitionState)) return;
+    exhibitionState = triggerFlip(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-2" &&
+      !rhythmState.pendingPattern
+    ) {
+      const targets = pendingAccentTargetsForStep(exhibitionState.step);
+      if (targets) {
+        const accented = withAccentsAt(rhythmState.currentPattern, targets);
+        rhythmState = queuePendingPattern(rhythmState, accented);
+      }
+    }
     render();
   });
 
