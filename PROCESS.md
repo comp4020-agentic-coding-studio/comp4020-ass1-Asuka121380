@@ -276,6 +276,57 @@ timed against `AudioContext.currentTime`, not `setTimeout`.
     scope. pnpm check 241/241 (2 new tests):
     [`2721f00`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/2721f0077e86f7ae1fdb089955bd636fb0a7ca5b).
 
+12. **A final manual review after Milestone 7, on 2026-08-17, found two
+    remaining defects a fully green suite still couldn't see.** With
+    [`37d08fc`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/37d08fcdf0323ecced48eea712c25fba45bdb00e)
+    complete and `pnpm check` and `pnpm check:evidence` both passing, I
+    reviewed the exhibition once more against real user screenshots rather
+    than treating a green suite as the finish line. Two issues survived:
+    - The drum and bass staves were horizontally misaligned in Acts IV-V and
+      the laboratory. Code inspection found the bass stave had a bass clef
+      but no 4/4 time signature, and --- more fundamentally --- VexFlow's
+      own `getNoteStartX()` computation returns different values for the two
+      staves even with matching time signatures, because the percussion
+      clef's and bass clef's modifier glyphs measure different widths. I
+      chose the smallest correction rather than a layout rewrite: add the
+      missing time signature, then explicitly force
+      `bassStave.setNoteStartX(stave.getNoteStartX())` so both staves share
+      one x-grid regardless of how their modifiers happen to measure.
+    - I tested the bass through two playback systems: a better speaker, where
+      the kick and bass were technically distinguishable but still too
+      similar, and the built-in speaker of an ordinary laptop, where telling
+      them apart became difficult. Code inspection explained why: the bass
+      was documented throughout `EXHIBITION_FLOW.md` as a fixed C3 pitch
+      (~130.81 Hz), but `audio-voices.ts` actually synthesized it as a pure
+      sine at 82 Hz with essentially the same short envelope shape as the
+      kick --- two near-identical low-frequency thumps rather than one
+      percussive hit and one pitched, sustained note. I again chose the
+      smallest effective change over redesigning the audio system: correct
+      the frequency to true C3 (130.8128 Hz), switch the oscillator to
+      triangle so it actually carries pitch-defining harmonics, raise the
+      lowpass cutoff to 800 Hz so those harmonics survive, and give the bass
+      a slightly slower attack and longer decay than the kick so the two
+      read as different instruments by envelope shape as well as timbre. The
+      kick itself was left untouched.
+    Both fixes were covered with regression tests before committing: a
+    `vi.spyOn`-based test on `Stave.prototype.setNoteStartX` (jsdom has no
+    canvas text metrics, so `getNoteStartX()` collapses to a constant there
+    regardless of clef content --- a plain coordinate comparison alone would
+    have passed even against the unfixed bug) plus a coordinate-tolerance
+    test, and a new `audio-voices.test.ts` asserting the bass's frequency,
+    oscillator type, filter, envelope timing, and independence from the
+    kick, all verified via `git stash` to genuinely fail against the
+    pre-fix code. A real-Chromium pass at both marking viewports across Act
+    IV Lock, Act IV Answer, Act V, and the laboratory measured 0px of
+    drum/bass notehead offset throughout, including immediately after a
+    mid-playback resize, and an instrumented Web Audio graph confirmed the
+    kick remains an untouched sine sweep while the bass now fires as an
+    independent, stable 130.8128 Hz triangle through an 800Hz lowpass. I
+    cannot claim the bass now sounds sufficiently distinct on a poor
+    speaker --- that subjective judgement is the user's alone, and this
+    entry does not assert it has been given. pnpm check 250/250:
+    [`84f52ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/84f52acfe9f257792b9d11a7c562cb748bebcffa).
+
 ## Before you ship
 
 `pnpm check:evidence` verifies the citations above resolve to real commits,
