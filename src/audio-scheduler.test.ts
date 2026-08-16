@@ -52,4 +52,30 @@ describe("createScheduler bar boundaries", () => {
     vi.advanceTimersByTime(25);
     expect(onBarBoundary).toHaveBeenCalledTimes(4);
   });
+
+  it("restart() re-anchors to slot 0 without firing a spurious boundary or requiring a fresh start", () => {
+    vi.useFakeTimers();
+    const clock = fakeClock();
+    const onBarBoundary = vi.fn();
+    const slotsSeen: number[] = [];
+    const scheduler = createScheduler(clock, {
+      getRhythmState: () => createInitialRhythmState(),
+      onNoteScheduled: (slotIndex) => slotsSeen.push(slotIndex),
+      onBarBoundary,
+    });
+
+    scheduler.start();
+    clock.currentTime = 2.5 * 1.5; // partway through the second bar
+    vi.advanceTimersByTime(25);
+    expect(onBarBoundary).toHaveBeenCalledTimes(1);
+
+    slotsSeen.length = 0;
+    scheduler.restart();
+    // restart() doesn't advance the clock itself — the next lookahead tick
+    // schedules starting from slot 0 again at the current clock time.
+    vi.advanceTimersByTime(25);
+    expect(slotsSeen[0]).toBe(0);
+    // The immediate slot-0 landing must not count as a completed bar.
+    expect(onBarBoundary).toHaveBeenCalledTimes(1);
+  });
 });

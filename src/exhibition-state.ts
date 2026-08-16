@@ -182,7 +182,20 @@ export type ExhibitionScreen =
   | Act4Screen
   | Act5Screen;
 
-export type ExhibitionState = TitleScreen | ExhibitionScreen;
+// The laboratory (EXHIBITION_FLOW.md section 11) is a sibling of "exhibition",
+// not a sixth act — it has no scripted step sequence, so advanceBar/
+// selectTarget's existing `state.screen !== "exhibition"` guards already make
+// it inert to both without any new case. Its own editable pattern/tempo/mute
+// state lives outside ExhibitionState entirely (src/laboratory.ts's LabState,
+// held in main.ts), mirroring how RhythmState already sits outside this file.
+// The acknowledgement page is a section reached by scrolling within this same
+// screen (the one deliberate laboratory-to-acknowledgement scroll the design
+// system allows), not a separate screen value.
+export interface LaboratoryScreen {
+  readonly screen: "laboratory";
+}
+
+export type ExhibitionState = TitleScreen | ExhibitionScreen | LaboratoryScreen;
 
 export const ACT1_TARGETS: readonly EighthIndex[] = [
   BEAT_ONE_INDEX,
@@ -302,6 +315,15 @@ function startAct5(): ExhibitionState {
 // back-navigation will call, alongside Act I's.
 export function returnToTitle(): ExhibitionState {
   return { screen: "title" };
+}
+
+// Act V's own "settled" seam (EXHIBITION_FLOW.md section 11, "Entry state"):
+// the visitor arrives with the finished pocket groove already sounding, so
+// the laboratory opens on createPocketPattern() rather than a fresh pattern —
+// see main.ts's screen-change handler, which calls this the same bar-boundary
+// way startAct2..5 hand off between acts.
+export function startLaboratory(): ExhibitionState {
+  return { screen: "laboratory" };
 }
 
 export function selectableTargets(
@@ -612,8 +634,9 @@ export function advanceBar(state: ExhibitionState): ExhibitionState {
           ? { ...state, step: "settled", barsInStep: 0 }
           : { ...state, barsInStep };
       case "settled":
-        // Extension seam for the laboratory (Milestone 6).
-        return state;
+        // Any bar boundary while settled moves the visitor directly into the
+        // laboratory (EXHIBITION_FLOW.md section 11).
+        return startLaboratory();
     }
   }
 

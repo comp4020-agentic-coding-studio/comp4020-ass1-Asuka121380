@@ -166,6 +166,76 @@
           </button>
         </div>
       </section>
+
+      <div class="laboratory-flow" data-testid="laboratory-flow">
+        <section class="laboratory" data-testid="laboratory">
+          <h2 class="lab-heading">YOUR TURN</h2>
+          <p class="lab-subheading">Keep the pulse. Move the weight.</p>
+          <div class="lab-staff-frame" data-testid="lab-staff-frame">
+            <div class="lab-staff" data-testid="lab-staff"></div>
+            <div class="lab-hit-targets" data-testid="lab-hit-targets"></div>
+          </div>
+          <p class="lab-observation" data-testid="lab-observation" aria-live="polite"></p>
+          <div class="lab-mutes" data-testid="lab-mutes">
+            <button type="button" class="lab-mute" data-testid="lab-mute-hihat-closed" aria-pressed="false">
+              mute hi-hat
+            </button>
+            <button type="button" class="lab-mute" data-testid="lab-mute-snare" aria-pressed="false">
+              mute snare
+            </button>
+            <button type="button" class="lab-mute" data-testid="lab-mute-kick" aria-pressed="false">
+              mute bass drum
+            </button>
+            <button type="button" class="lab-mute" data-testid="lab-mute-bass" aria-pressed="false">
+              mute bass
+            </button>
+          </div>
+          <div class="lab-playback-controls" data-testid="lab-playback-controls">
+            <button type="button" class="lab-play-pause" data-testid="lab-play-pause" aria-pressed="true">
+              ⏸ pause
+            </button>
+            <button type="button" class="lab-restart" data-testid="lab-restart">↺ restart bar</button>
+            <label class="lab-tempo-label" for="lab-tempo">tempo</label>
+            <input
+              type="range"
+              id="lab-tempo"
+              class="lab-tempo"
+              data-testid="lab-tempo"
+              min="70"
+              max="130"
+              value="96"
+            />
+            <label class="lab-volume-label" for="lab-volume">volume</label>
+            <input
+              type="range"
+              id="lab-volume"
+              class="lab-volume"
+              data-testid="lab-volume"
+              min="0"
+              max="1"
+              step="0.01"
+              value="1"
+            />
+          </div>
+          <div class="lab-presets" data-testid="lab-presets"></div>
+          <div class="lab-tools" data-testid="lab-tools"></div>
+          <p class="lab-exit-prompt" data-testid="lab-exit-prompt" hidden>One last note… ↓</p>
+        </section>
+
+        <section class="acknowledgement" data-testid="acknowledgement">
+          <div class="ack-staff" data-testid="ack-staff" aria-hidden="true"></div>
+          <p class="ack-thanks">Thanks for listening.</p>
+          <p class="ack-heart">Made with <span class="ack-heart-glyph">♥</span> by Asuka121380</p>
+          <p class="ack-closing">
+            Eight notes. One bar.<br />
+            A little more weight.
+          </p>
+          <div class="ack-controls">
+            <button type="button" class="ack-replay" data-testid="ack-replay">↑ play it again</button>
+            <button type="button" class="ack-return" data-testid="ack-return">return to the laboratory</button>
+          </div>
+        </section>
+      </div>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

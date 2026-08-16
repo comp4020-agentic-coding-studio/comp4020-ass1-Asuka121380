@@ -295,12 +295,12 @@ describe("exhibition state — Act V bar-boundary sequence", () => {
     expect(state.step).toBe("settled");
   });
 
-  it("settled holds — the laboratory hand-off is a later milestone", () => {
+  it("settled hands off to the laboratory on the next bar boundary", () => {
     let state = reachFullPerformanceListening();
     for (let i = 0; i < 9; i++) state = advanceBar(state); // -> settled
     if (state.screen !== "exhibition") throw new Error("unreachable");
     expect(state.step).toBe("settled");
-    expect(advanceBar(state)).toEqual(state);
+    expect(advanceBar(state)).toEqual({ screen: "laboratory" });
   });
 });
 

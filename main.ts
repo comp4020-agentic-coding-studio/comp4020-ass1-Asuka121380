@@ -36,6 +36,22 @@ import {
   type ActId,
   type ExhibitionState,
 } from "./src/exhibition-state";
+import {
+  LAB_PRESETS,
+  LAB_RELATIONSHIP_TOOLS,
+  LAB_OBSERVATION_TEXT,
+  applyLabPreset,
+  applyLabRelationshipTool,
+  createInitialLabState,
+  cycleLabSlot,
+  describeLabPattern,
+  setLabMasterVolume,
+  setLabTempo,
+  toggleLabMute,
+  type LabPreset,
+  type LabRelationshipTool,
+  type LabState,
+} from "./src/laboratory";
 import { prefersReducedMotion, watchReducedMotion } from "./src/motion";
 import { renderPulseScore, type NoteBox } from "./src/notation";
 import {
@@ -58,6 +74,7 @@ import {
   withBassIndices,
   withKickIndices,
   type EighthIndex,
+  type Instrument,
   type RhythmState,
 } from "./src/rhythm-model";
 import { initTitleScreen } from "./src/title-screen";
@@ -132,6 +149,57 @@ const compareAnswerButtonEl = document.querySelector<HTMLButtonElement>(
 const playPocketButtonEl = document.querySelector<HTMLButtonElement>(
   '[data-testid="play-pocket"]',
 );
+const laboratoryFlowEl = document.querySelector<HTMLDivElement>(
+  '[data-testid="laboratory-flow"]',
+);
+const labStaffContainer = document.querySelector<HTMLDivElement>(
+  '[data-testid="lab-staff"]',
+);
+const labHitTargetsContainer = document.querySelector<HTMLDivElement>(
+  '[data-testid="lab-hit-targets"]',
+);
+const labObservationEl = document.querySelector<HTMLParagraphElement>(
+  '[data-testid="lab-observation"]',
+);
+const labExitPromptEl = document.querySelector<HTMLParagraphElement>(
+  '[data-testid="lab-exit-prompt"]',
+);
+const labMuteHihatButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-mute-hihat-closed"]',
+);
+const labMuteSnareButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-mute-snare"]',
+);
+const labMuteKickButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-mute-kick"]',
+);
+const labMuteBassButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-mute-bass"]',
+);
+const labPlayPauseButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-play-pause"]',
+);
+const labRestartButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="lab-restart"]',
+);
+const labTempoInputEl = document.querySelector<HTMLInputElement>(
+  '[data-testid="lab-tempo"]',
+);
+const labVolumeInputEl = document.querySelector<HTMLInputElement>(
+  '[data-testid="lab-volume"]',
+);
+const labPresetsContainer = document.querySelector<HTMLDivElement>(
+  '[data-testid="lab-presets"]',
+);
+const labToolsContainer = document.querySelector<HTMLDivElement>(
+  '[data-testid="lab-tools"]',
+);
+const ackReplayButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="ack-replay"]',
+);
+const ackReturnButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="ack-return"]',
+);
 
 if (
   titleRoot &&
@@ -155,7 +223,24 @@ if (
   shiftBassButtonEl &&
   compareLockButtonEl &&
   compareAnswerButtonEl &&
-  playPocketButtonEl
+  playPocketButtonEl &&
+  laboratoryFlowEl &&
+  labStaffContainer &&
+  labHitTargetsContainer &&
+  labObservationEl &&
+  labExitPromptEl &&
+  labMuteHihatButtonEl &&
+  labMuteSnareButtonEl &&
+  labMuteKickButtonEl &&
+  labMuteBassButtonEl &&
+  labPlayPauseButtonEl &&
+  labRestartButtonEl &&
+  labTempoInputEl &&
+  labVolumeInputEl &&
+  labPresetsContainer &&
+  labToolsContainer &&
+  ackReplayButtonEl &&
+  ackReturnButtonEl
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
@@ -172,12 +257,23 @@ if (
   const compareLockButton = compareLockButtonEl;
   const compareAnswerButton = compareAnswerButtonEl;
   const playPocketButton = playPocketButtonEl;
+  const laboratoryFlow = laboratoryFlowEl;
+  const labStaffEl = labStaffContainer;
+  const labObservation = labObservationEl;
+  const labExitPrompt = labExitPromptEl;
+  const labPlayPauseButton = labPlayPauseButtonEl;
+  const labRestartButton = labRestartButtonEl;
+  const labTempoInput = labTempoInputEl;
+  const labVolumeInput = labVolumeInputEl;
+  const ackReplayButton = ackReplayButtonEl;
+  const ackReturnButton = ackReturnButtonEl;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
   let currentAudioContext: AudioContext | null = null;
   let activeVoice: ReturnType<typeof createDrumKitVoices> | null = null;
   let muted = false;
+  let labState: LabState | null = null;
   let currentAnnotationId: AnnotationContent["id"] | null = null;
   let latestNoteBoxes: readonly NoteBox[] = [];
   let latestKickNoteYs: readonly number[] = [];
@@ -854,7 +950,229 @@ if (
     playPocketButton.hidden = !canTriggerFullPerformance(exhibitionState);
   }
 
+  // Laboratory (EXHIBITION_FLOW.md section 11) — the visitor's own editable
+  // score. LabState holds its own pattern/tempo/volume/mute independently of
+  // rhythmState (which stays parked at Act V's finished pocket groove), and
+  // the single scheduler already running since onActivated keeps playing
+  // straight through the Act V -> laboratory transition: getRhythmState below
+  // simply switches which pattern it reads from once labState exists.
+  const LAB_INSTRUMENTS: readonly Instrument[] = ["hihat-closed", "snare", "kick", "bass"];
+  const LAB_ROW_HALF_HEIGHT_MAX = 20;
+  const LAB_ROW_HALF_HEIGHT_MIN = 6;
+
+  // A fixed 20px half-height (the old constant) assumes every instrument row
+  // sits at least 40px from its neighbours — true for hi-hat/snare, but the
+  // snare/kick gap on the drum stave is only ~20px, so a fixed band there
+  // covered half of the row above and below it, stealing clicks meant for
+  // the neighbouring row. Size each render's band to at most half the
+  // smallest gap actually present between this render's row positions.
+  function computeLabRowHalfHeight(
+    rowYs: Readonly<Record<Instrument, readonly number[] | undefined>>,
+  ): number {
+    const canonicalYs = LAB_INSTRUMENTS.map((instrument) => rowYs[instrument]?.[0]).filter(
+      (y): y is number => y !== undefined,
+    );
+    if (canonicalYs.length < 2) return LAB_ROW_HALF_HEIGHT_MAX;
+    const sorted = [...canonicalYs].sort((a, b) => a - b);
+    let minGap = Infinity;
+    for (let i = 1; i < sorted.length; i++) {
+      minGap = Math.min(minGap, sorted[i] - sorted[i - 1]);
+    }
+    return Math.min(LAB_ROW_HALF_HEIGHT_MAX, Math.max(LAB_ROW_HALF_HEIGHT_MIN, minGap / 2 - 1));
+  }
+
+  function labTargetLabel(instrument: Instrument, index: EighthIndex): string {
+    const name = instrument === "kick" ? "bass drum" : instrument === "hihat-closed" ? "hi-hat" : instrument;
+    return `${name}, position ${index + 1}`;
+  }
+
+  const labTargets = new Map<string, HTMLButtonElement>();
+  for (const instrument of LAB_INSTRUMENTS) {
+    for (let i = 0; i < 8; i++) {
+      const index = i as EighthIndex;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "lab-note-target";
+      button.dataset.testid = `lab-target-${instrument}-${index}`;
+      button.dataset.instrument = instrument;
+      button.dataset.index = String(index);
+      button.style.display = "none";
+      button.setAttribute("aria-label", labTargetLabel(instrument, index));
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        if (!labState) return;
+        labState = cycleLabSlot(labState, instrument, index);
+        renderLaboratory();
+      });
+      labTargets.set(`${instrument}-${index}`, button);
+      labHitTargetsContainer.append(button);
+    }
+  }
+
+  // Left/right move along the same voice's time positions, up/down move
+  // between voices at the same time position (EXHIBITION_FLOW.md section 11,
+  // "Keyboard controls") — the targets are real focusable <button>s, so this
+  // only ever redirects focus; activation itself is native button behaviour.
+  labHitTargetsContainer.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement)) return;
+    const instrument = active.dataset.instrument as Instrument | undefined;
+    const indexAttr = active.dataset.index;
+    if (!instrument || indexAttr === undefined) return;
+    const index = Number(indexAttr) as EighthIndex;
+    let nextInstrument: Instrument = instrument;
+    let nextIndex = index;
+    if (event.key === "ArrowLeft") nextIndex = ((index + 7) % 8) as EighthIndex;
+    else if (event.key === "ArrowRight") nextIndex = ((index + 1) % 8) as EighthIndex;
+    else {
+      const pos = LAB_INSTRUMENTS.indexOf(instrument);
+      const delta = event.key === "ArrowUp" ? -1 : 1;
+      nextInstrument = LAB_INSTRUMENTS[(pos + delta + LAB_INSTRUMENTS.length) % LAB_INSTRUMENTS.length];
+    }
+    const nextButton = labTargets.get(`${nextInstrument}-${nextIndex}`);
+    if (nextButton) {
+      event.preventDefault();
+      nextButton.focus();
+    }
+  });
+
+  const labMuteButtons: readonly (readonly [Instrument, HTMLButtonElement])[] = [
+    ["hihat-closed", labMuteHihatButtonEl],
+    ["snare", labMuteSnareButtonEl],
+    ["kick", labMuteKickButtonEl],
+    ["bass", labMuteBassButtonEl],
+  ];
+  for (const [instrument, button] of labMuteButtons) {
+    button.addEventListener("click", () => {
+      if (!labState) return;
+      labState = toggleLabMute(labState, instrument);
+      renderLaboratory();
+    });
+  }
+
+  const labPresetButtons = new Map<LabPreset, HTMLButtonElement>();
+  for (const preset of LAB_PRESETS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lab-preset";
+    button.dataset.testid = `lab-preset-${preset.id}`;
+    button.textContent = preset.label;
+    button.addEventListener("click", () => {
+      if (!labState) return;
+      labState = applyLabPreset(labState, preset.id);
+      renderLaboratory();
+    });
+    labPresetButtons.set(preset.id, button);
+    labPresetsContainer.append(button);
+  }
+
+  const labToolButtons = new Map<LabRelationshipTool, HTMLButtonElement>();
+  for (const tool of LAB_RELATIONSHIP_TOOLS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lab-tool";
+    button.dataset.testid = `lab-tool-${tool.id}`;
+    button.textContent = tool.label;
+    button.addEventListener("click", () => {
+      if (!labState) return;
+      labState = applyLabRelationshipTool(labState, tool.id);
+      renderLaboratory();
+    });
+    labToolButtons.set(tool.id, button);
+    labToolsContainer.append(button);
+  }
+
+  function syncLabTargets(
+    noteBoxes: readonly NoteBox[],
+    rowYs: Readonly<Record<Instrument, readonly number[] | undefined>>,
+  ): void {
+    if (!labState) return;
+    const halfHeight = computeLabRowHalfHeight(rowYs);
+    for (const instrument of LAB_INSTRUMENTS) {
+      const ys = rowYs[instrument] ?? [];
+      const voice = labState.pattern.voices.find((v) => v.instrument === instrument);
+      for (let i = 0; i < 8; i++) {
+        const index = i as EighthIndex;
+        const button = labTargets.get(`${instrument}-${index}`);
+        const box = noteBoxes[index];
+        const y = ys[index];
+        if (!button) continue;
+        if (!box || y === undefined) {
+          button.style.display = "none";
+          continue;
+        }
+        button.style.display = "flex";
+        button.style.left = `${box.x}px`;
+        button.style.top = `${y - halfHeight}px`;
+        button.style.width = `${box.w}px`;
+        button.style.height = `${halfHeight * 2}px`;
+        // The CSS class's min-height (a floor for generously-spaced rows)
+        // would otherwise force overlap back in whenever the computed band
+        // is thinner than it — override it inline to whatever the computed
+        // band actually is.
+        button.style.minHeight = `${halfHeight * 2}px`;
+
+        const slot = voice?.slots[index];
+        button.classList.toggle("lab-note-target-active", !!slot?.active);
+        button.classList.toggle("lab-note-target-accented", !!slot?.accent);
+        button.setAttribute("aria-pressed", String(!!slot?.active));
+      }
+    }
+  }
+
+  function renderLaboratory(): void {
+    if (!labState) return;
+    const { noteBoxes, kickNoteYs, bassNoteYs, hihatNoteYs, snareNoteYs } = renderPulseScore(
+      labStaffEl,
+      labState.pattern,
+    );
+    syncLabTargets(noteBoxes, {
+      "hihat-closed": hihatNoteYs,
+      snare: snareNoteYs,
+      kick: kickNoteYs,
+      bass: bassNoteYs,
+      "practice-pad": undefined,
+    });
+
+    const observation = describeLabPattern(labState.pattern);
+    labObservation.textContent = observation ? LAB_OBSERVATION_TEXT[observation] : "";
+    labExitPrompt.hidden = !labState.hasEdited;
+
+    for (const [instrument, button] of labMuteButtons) {
+      button.setAttribute("aria-pressed", String(labState.mutes.has(instrument)));
+    }
+    labTempoInput.value = String(labState.tempoBpm);
+    labVolumeInput.value = String(labState.masterVolume);
+  }
+
+  // The one-time transition into the laboratory, triggered from inside
+  // onBarBoundary the instant advanceBar first reports "laboratory" — the
+  // same scheduler and AudioContext already alive since onActivated keep
+  // running straight through, no new gesture required.
+  function enterLaboratory(): void {
+    labState = createInitialLabState(rhythmState.currentPattern.tempoBpm);
+    delete stageEl.dataset.act;
+    delete stageEl.dataset.step;
+    stageEl.classList.remove("score-stage-active");
+    laboratoryFlow.classList.add("laboratory-flow-active");
+    labPlayPauseButton.textContent = "⏸ pause";
+    labPlayPauseButton.setAttribute("aria-pressed", "true");
+    if (activeVoice) activeVoice.masterGain.gain.value = muted ? 0 : labState.masterVolume;
+    renderLaboratory();
+  }
+
+  function exitLaboratoryState(): void {
+    laboratoryFlow.classList.remove("laboratory-flow-active");
+    labState = null;
+    labExitPrompt.hidden = true;
+  }
+
   function render(): void {
+    if (exhibitionState.screen === "laboratory") {
+      renderLaboratory();
+      return;
+    }
     // The bass stave (from Act IV) is a second real VexFlow stave drawn
     // below the drum-kit stave — the frame needs extra CSS height before
     // renderPulseScore reads the container's clientHeight, or the bass
@@ -898,9 +1216,18 @@ if (
       render();
 
       scheduler = createScheduler(audioContext, {
-        getRhythmState: () => rhythmState,
+        getRhythmState: () =>
+          exhibitionState.screen === "laboratory" && labState
+            ? { currentPattern: labState.pattern, pendingPattern: null }
+            : rhythmState,
         onNoteScheduled(slotIndex, time, note) {
+          const inLaboratory = exhibitionState.screen === "laboratory";
+          if (inLaboratory && labState?.mutes.has(note.instrument)) return;
           if (note.active) voice.trigger(note.instrument, time, note.velocity, note.accent);
+          // The laboratory has no playback cursor (not part of its spec) —
+          // the guided acts' cursor is scoped to the now-hidden score-stage's
+          // own note boxes, which no longer correspond to the lab's grid.
+          if (inLaboratory) return;
           // The visual cursor is driven by this timeout, but the sound above
           // was already scheduled against `time` on the audio clock — the
           // timeout only decides when the *cursor* moves, never the audio.
@@ -918,7 +1245,11 @@ if (
         },
         onBarBoundary() {
           rhythmState = applyPendingPattern(rhythmState);
+          const previousScreen = exhibitionState.screen;
           exhibitionState = advanceBar(exhibitionState);
+          if (exhibitionState.screen === "laboratory" && previousScreen !== "laboratory") {
+            enterLaboratory();
+          }
           // Act IV's "final-1" step is reached purely by bar-count advance
           // (never a click), so it's the one case pendingBassIndicesForStep
           // needs a generic caller rather than a click handler — every other
@@ -961,7 +1292,12 @@ if (
     muteToggle.addEventListener("click", () => {
       if (!activeVoice) return;
       muted = !muted;
-      activeVoice.masterGain.gain.value = muted ? 0 : 1;
+      // Unmuting inside the laboratory must restore *its* volume slider
+      // rather than snapping back to full gain — labState.masterVolume is
+      // the source of truth for that scene's own volume control.
+      const unmutedGain =
+        exhibitionState.screen === "laboratory" && labState ? labState.masterVolume : 1;
+      activeVoice.masterGain.gain.value = muted ? 0 : unmutedGain;
       muteToggle.textContent = muted ? "sound off" : "sound on";
       muteToggle.setAttribute("aria-pressed", String(muted));
     });
@@ -978,15 +1314,34 @@ if (
       clearCursorTimeouts();
       playPauseButton.textContent = "▶ play";
       playPauseButton.setAttribute("aria-pressed", "false");
+      labPlayPauseButton.textContent = "▶ play";
+      labPlayPauseButton.setAttribute("aria-pressed", "false");
     } else {
       void scheduler.resume().then(() => {
         playPauseButton.textContent = "⏸ pause";
         playPauseButton.setAttribute("aria-pressed", "true");
+        labPlayPauseButton.textContent = "⏸ pause";
+        labPlayPauseButton.setAttribute("aria-pressed", "true");
       });
     }
   };
 
   playPauseButton.addEventListener("click", togglePlayPause);
+  labPlayPauseButton.addEventListener("click", togglePlayPause);
+  labRestartButton.addEventListener("click", () => {
+    scheduler?.restart();
+  });
+
+  labTempoInput.addEventListener("input", () => {
+    if (!labState) return;
+    labState = setLabTempo(labState, Number(labTempoInput.value));
+  });
+
+  labVolumeInput.addEventListener("input", () => {
+    if (!labState) return;
+    labState = setLabMasterVolume(labState, Number(labVolumeInput.value));
+    if (activeVoice) activeVoice.masterGain.gain.value = muted ? 0 : labState.masterVolume;
+  });
 
   // Any element with its own native Space/Enter semantics (a button, link,
   // form control, or contenteditable region) must keep handling Space
@@ -1007,10 +1362,31 @@ if (
   // playhead, and pending pattern state always stay in lockstep with it.
   document.addEventListener("keydown", (event) => {
     if (event.key !== " " && event.key !== "Spacebar") return;
-    if (exhibitionState.screen !== "exhibition") return;
+    if (exhibitionState.screen !== "exhibition" && exhibitionState.screen !== "laboratory") return;
     if (focusOwnsSpaceKey()) return;
     event.preventDefault();
     togglePlayPause();
+  });
+
+  // Laboratory-only shortcuts (EXHIBITION_FLOW.md section 11, "Keyboard
+  // controls"): digits 1-7 jump straight to a curated preset, R restores the
+  // finished Pocket groove — both gated the same way Space is, so a digit
+  // typed into a focused control never gets hijacked.
+  document.addEventListener("keydown", (event) => {
+    if (exhibitionState.screen !== "laboratory" || !labState) return;
+    if (focusOwnsSpaceKey()) return;
+    if (event.key >= "1" && event.key <= "7") {
+      const preset = LAB_PRESETS[Number(event.key) - 1];
+      if (preset) {
+        event.preventDefault();
+        labState = applyLabPreset(labState, preset.id);
+        renderLaboratory();
+      }
+    } else if (event.key === "r" || event.key === "R") {
+      event.preventDefault();
+      labState = applyLabPreset(labState, "the-pocket");
+      renderLaboratory();
+    }
   });
 
   // Resets the teaching sequence only — rhythm/exhibition state and the
@@ -1030,10 +1406,16 @@ if (
   // CLAUDE.md, an AudioContext may only ever be constructed inside
   // title-screen.ts, so this one is closed rather than merely muted) and
   // re-arms the title screen's first-activation path for a clean restart.
-  backNavButton.addEventListener("click", () => {
+  // Shared by the header's back-nav (from any act) and the acknowledgement
+  // page's "play it again" (identical semantics: tear the whole exhibition
+  // down and re-arm a clean title screen) — one implementation rather than
+  // two copies that could drift.
+  const exitToTitle = (): void => {
     clearCursorTimeouts();
     resetAnnotationDisplay();
     cursorEl.classList.remove("playback-cursor-active");
+    exitLaboratoryState();
+    laboratoryFlow.scrollTop = 0;
 
     const closingScheduler = scheduler;
     const closingAudioContext = currentAudioContext;
@@ -1073,6 +1455,15 @@ if (
     titleHandles.reset();
 
     render();
+  };
+
+  backNavButton.addEventListener("click", exitToTitle);
+  ackReplayButton.addEventListener("click", exitToTitle);
+
+  // "return to the laboratory" (EXHIBITION_FLOW.md section 12) scrolls back
+  // up without touching labState — the visitor's edited pattern survives.
+  ackReturnButton.addEventListener("click", () => {
+    laboratoryFlow.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
   });
 
   // Activating the flip queues the accent swap at the next barline rather
@@ -1242,4 +1633,8 @@ if (
   new ResizeObserver(() => {
     if (stageEl.classList.contains("score-stage-active")) render();
   }).observe(stageEl);
+
+  new ResizeObserver(() => {
+    if (laboratoryFlow.classList.contains("laboratory-flow-active")) renderLaboratory();
+  }).observe(laboratoryFlow);
 }

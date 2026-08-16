@@ -61,8 +61,8 @@ export const EIGHTH_LABELS: readonly string[] = [
 // ~4dB gain difference) too subtle to read as "accented" by ear — widened to
 // a >2.5x ratio (>=8dB) so ordinary beats sit back and the accented beats are
 // unmistakably heavier, not just marginally louder.
-const BASE_VELOCITY = 0.4;
-const ACCENT_VELOCITY = 1.0;
+export const BASE_VELOCITY = 0.4;
+export const ACCENT_VELOCITY = 1.0;
 
 export function createPulsePattern(tempoBpm = 96): RhythmPattern {
   const slots: NoteEvent[] = Array.from({ length: EIGHTH_COUNT }, () => ({
@@ -275,6 +275,66 @@ export function withBassIndices(
   );
 
   return { ...pattern, id: `${pattern.id}-bass`, voices };
+}
+
+// The laboratory (EXHIBITION_FLOW.md section 11) always opens on the finished
+// Pocket groove from Act V — the same kick/bass indices, built the same way
+// (createDrumKitPattern + addBassVoice) rather than a parallel construction.
+export function createPocketPattern(tempoBpm = 96): RhythmPattern {
+  const kit = createDrumKitPattern(tempoBpm, POCKET_FINAL_KICK_INDICES);
+  return addBassVoice(kit, POCKET_FINAL_BASS_INDICES);
+}
+
+// The laboratory's editable score (EXHIBITION_FLOW.md section 11): toggles a
+// single slot's active state for one named voice, leaving every other voice
+// and slot untouched. Turning a slot off also clears its accent (an inactive
+// slot has nothing to accent); turning it on restores an ordinary (unaccented)
+// velocity, matching drumVoiceSlots' own active/inactive convention.
+export function toggleVoiceSlotActive(
+  pattern: RhythmPattern,
+  instrument: Instrument,
+  index: EighthIndex,
+): RhythmPattern {
+  const voices = pattern.voices.map((voice) => {
+    if (voice.instrument !== instrument) return voice;
+    const slots = voice.slots.map((slot, i) => {
+      if (i !== index) return slot;
+      const active = !slot.active;
+      return {
+        ...slot,
+        active,
+        accent: active && slot.accent,
+        velocity: active ? (slot.accent ? ACCENT_VELOCITY : BASE_VELOCITY) : 0,
+      };
+    });
+    return { ...voice, slots };
+  });
+  return { ...pattern, id: `${pattern.id}-edit`, voices };
+}
+
+// Toggles a single slot's accent for one named voice — used for the
+// hi-hat (which can never be deleted, only accented) and for any active
+// snare/kick/bass slot. A no-op on an inactive slot, since there is nothing
+// to accent yet.
+export function toggleVoiceSlotAccent(
+  pattern: RhythmPattern,
+  instrument: Instrument,
+  index: EighthIndex,
+): RhythmPattern {
+  const voices = pattern.voices.map((voice) => {
+    if (voice.instrument !== instrument) return voice;
+    const slots = voice.slots.map((slot, i) => {
+      if (i !== index || !slot.active) return slot;
+      const accent = !slot.accent;
+      return { ...slot, accent, velocity: accent ? ACCENT_VELOCITY : BASE_VELOCITY };
+    });
+    return { ...voice, slots };
+  });
+  return { ...pattern, id: `${pattern.id}-edit`, voices };
+}
+
+export function withTempo(pattern: RhythmPattern, tempoBpm: number): RhythmPattern {
+  return { ...pattern, tempoBpm };
 }
 
 export function activeInstruments(pattern: RhythmPattern): Instrument[] {

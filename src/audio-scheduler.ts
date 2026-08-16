@@ -17,6 +17,11 @@ export interface Scheduler {
   start(): void;
   pause(): void;
   resume(): Promise<void>;
+  // Re-anchors playback to slot 0 against the current clock time without
+  // pausing or recreating the scheduler — the laboratory's "restart bar"
+  // control (EXHIBITION_FLOW.md section 11), the one place a visitor can
+  // snap playback back to the top of the bar mid-performance.
+  restart(): void;
   destroy(): void;
   readonly isRunning: boolean;
 }
@@ -94,6 +99,15 @@ export function createScheduler(
       running = true;
       await audioContext.resume();
       tick();
+    },
+    restart() {
+      // Same reset start() performs, minus the timer (re)start — the
+      // existing lookahead loop (running or not) picks up from slot 0 on its
+      // own next tick, and awaitingFirstBar again swallows the immediate
+      // slot-0 boundary so restarting never fires a spurious onBarBoundary.
+      currentSlot = 0;
+      nextNoteTime = audioContext.currentTime;
+      awaitingFirstBar = true;
     },
     destroy() {
       running = false;

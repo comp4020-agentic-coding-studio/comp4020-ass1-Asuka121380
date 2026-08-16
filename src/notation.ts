@@ -56,6 +56,13 @@ export interface ScoreHandles {
   // primitives draw between these rather than re-deriving stave geometry.
   readonly kickNoteYs?: readonly number[];
   readonly bassNoteYs?: readonly number[];
+  // Row y-coordinate for the hi-hat/snare voices (constant across slots —
+  // both are fixed-pitch, same as kick/bass). Present only for a drum-kit
+  // pattern. The laboratory's independently-clickable 4-voice grid uses
+  // these alongside kickNoteYs/bassNoteYs, since drawDrumKit's shared
+  // upper-voice chord doesn't otherwise expose a per-voice y.
+  readonly hihatNoteYs?: readonly number[];
+  readonly snareNoteYs?: readonly number[];
   destroy(): void;
 }
 
@@ -106,6 +113,8 @@ export function renderPulseScore(
     noteBoxes: drawResult.noteBoxes,
     kickNoteYs: drawResult.kickNoteYs,
     bassNoteYs: drawResult.bassNoteYs,
+    hihatNoteYs: drawResult.hihatNoteYs,
+    snareNoteYs: drawResult.snareNoteYs,
     destroy() {
       container.replaceChildren();
     },
@@ -179,6 +188,38 @@ interface DrumKitDrawResult {
   readonly noteBoxes: NoteBox[];
   readonly kickNoteYs?: readonly number[];
   readonly bassNoteYs?: readonly number[];
+  readonly hihatNoteYs?: readonly number[];
+  readonly snareNoteYs?: readonly number[];
+}
+
+// Fixed stave-line positions for the hi-hat (a/5, one line above the staff)
+// and snare (b/4, the middle line) — both fixed-pitch voices, so (unlike a
+// per-note getYs() lookup) a single stave-line computation is valid for
+// every slot regardless of whether that slot's note is currently active.
+const HIHAT_STAVE_LINE = -1;
+const SNARE_STAVE_LINE = 2;
+
+// VexFlow's Formatter joins the kick and bass voices into the same
+// tick-context pass as the hi-hat/snare voice purely for x-alignment across
+// the two staves (see the comment at the join site below) — but its
+// StaveNote.format() collision-avoidance heuristic then treats all three as
+// if they shared one physical staff, and will re-center a rest's notehead
+// toward the midpoint of its neighbouring voices whenever a bar has
+// kick/bass=rest at the same tick as active notes either side. That's a
+// real rendering defect (the rest glyph visibly lands off its own line), not
+// merely a cosmetic quirk, so every rest is re-pinned to its instrument's
+// fixed line right before drawing. A throwaway, never-staved StaveNote gives
+// the "intended" line for a key/clef pair independent of any formatting pass.
+function restLineFor(key: string, clef: "percussion" | "bass"): number {
+  return new StaveNote({ keys: [key], duration: "8r", clef }).getKeyProps()[0].line;
+}
+const KICK_REST_LINE = restLineFor(KICK_KEY, "percussion");
+const BASS_REST_LINE = restLineFor(BASS_KEY, "bass");
+
+function pinRestLines(notes: readonly StaveNote[], line: number): void {
+  for (const note of notes) {
+    if (note.isRest()) note.setKeyLine(0, line);
+  }
 }
 
 function drawDrumKit(
@@ -318,6 +359,10 @@ function drawDrumKit(
   // and stave lines render correctly per system.
   const voices = bassVoice ? [upperVoice, lowerVoice, bassVoice] : [upperVoice, lowerVoice];
   new Formatter().joinVoices(voices).formatToStave(voices, stave);
+  // Undo VexFlow's cross-stave rest-centering (see the comment above
+  // pinRestLines) now that formatting is done, before anything is drawn.
+  pinRestLines(lowerNotes, KICK_REST_LINE);
+  if (bassNotes) pinRestLines(bassNotes, BASS_REST_LINE);
   upperVoice.draw(context, stave);
   lowerVoice.draw(context, stave);
   if (bassVoice && bassStave) bassVoice.draw(context, bassStave);
@@ -336,6 +381,10 @@ function drawDrumKit(
 
   const kickNoteYs = lowerNotes.map((note) => note.getYs()[0]);
   const bassNoteYs = bassNotes?.map((note) => note.getYs()[0]);
+  const hihatY = stave.getYForLine(HIHAT_STAVE_LINE);
+  const snareY = stave.getYForLine(SNARE_STAVE_LINE);
+  const hihatNoteYs = upperNotes.map(() => hihatY);
+  const snareNoteYs = upperNotes.map(() => snareY);
 
-  return { noteBoxes, kickNoteYs, bassNoteYs };
+  return { noteBoxes, kickNoteYs, bassNoteYs, hihatNoteYs, snareNoteYs };
 }

@@ -7,12 +7,18 @@ import {
   BEAT_TWO_INDEX,
   EIGHTH_LABELS,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_AFTER_BEAT_THREE_INDEX,
+  OFFBEAT_AFTER_BEAT_FOUR_INDEX,
   OFFBEAT_KICK_INDICES,
   SYNCOPATED_KICK_INDICES,
   createDrumKitPattern,
+  createPocketPattern,
   createPulsePattern,
+  toggleVoiceSlotAccent,
+  toggleVoiceSlotActive,
   withAccentsAt,
   withKickIndices,
+  withTempo,
 } from "./rhythm-model";
 
 describe("rhythm model — eighth-note labels", () => {
@@ -108,5 +114,63 @@ describe("rhythm model — Act III drum kit", () => {
     expect(syncopatedKick.slots[OFFBEAT_AFTER_BEAT_TWO_INDEX].active).toBe(true);
     expect(syncopatedKick.slots[BEAT_FOUR_INDEX].active).toBe(true);
     expect(syncopatedKick.slots[BEAT_THREE_INDEX].active).toBe(false);
+  });
+});
+
+describe("rhythm model — Pocket factory (Act V / laboratory)", () => {
+  it("builds the finished four-voice pocket groove", () => {
+    const pocket = createPocketPattern(96);
+    expect(pocket.voices).toHaveLength(4);
+    const kick = pocket.voices.find((v) => v.instrument === "kick")!;
+    const bass = pocket.voices.find((v) => v.instrument === "bass")!;
+    expect(kick.slots[BEAT_THREE_INDEX].active).toBe(true);
+    expect(kick.slots[OFFBEAT_AFTER_BEAT_FOUR_INDEX].active).toBe(true);
+    expect(bass.slots[OFFBEAT_AFTER_BEAT_THREE_INDEX].active).toBe(true);
+    expect(bass.slots[OFFBEAT_AFTER_BEAT_FOUR_INDEX].active).toBe(true);
+  });
+});
+
+describe("rhythm model — laboratory editing primitives", () => {
+  it("toggles a single voice/slot's active state, leaving every other voice and slot untouched", () => {
+    const pocket = createPocketPattern(96);
+    const toggledOn = toggleVoiceSlotActive(pocket, "snare", BEAT_ONE_INDEX);
+    const snare = toggledOn.voices.find((v) => v.instrument === "snare")!;
+    expect(snare.slots[BEAT_ONE_INDEX].active).toBe(true);
+    expect(snare.slots[BEAT_ONE_INDEX].velocity).toBeGreaterThan(0);
+
+    const toggledOff = toggleVoiceSlotActive(toggledOn, "snare", BEAT_ONE_INDEX);
+    const snareOff = toggledOff.voices.find((v) => v.instrument === "snare")!;
+    expect(snareOff.slots[BEAT_ONE_INDEX].active).toBe(false);
+    expect(snareOff.slots[BEAT_ONE_INDEX].velocity).toBe(0);
+    expect(snareOff.slots[BEAT_ONE_INDEX].accent).toBe(false);
+
+    const kick = toggledOff.voices.find((v) => v.instrument === "kick")!;
+    expect(kick.slots[BEAT_THREE_INDEX].active).toBe(true);
+  });
+
+  it("toggles accent only on an already-active slot", () => {
+    const pocket = createPocketPattern(96);
+    const hihat = pocket.voices.find((v) => v.instrument === "hihat-closed")!;
+    expect(hihat.slots[BEAT_ONE_INDEX].active).toBe(true);
+
+    const accented = toggleVoiceSlotAccent(pocket, "hihat-closed", BEAT_ONE_INDEX);
+    const accentedHihat = accented.voices.find((v) => v.instrument === "hihat-closed")!;
+    expect(accentedHihat.slots[BEAT_ONE_INDEX].accent).toBe(true);
+    expect(accentedHihat.slots[BEAT_ONE_INDEX].velocity).toBeGreaterThan(
+      hihat.slots[BEAT_ONE_INDEX].velocity,
+    );
+
+    const snare = pocket.voices.find((v) => v.instrument === "snare")!;
+    expect(snare.slots[BEAT_ONE_INDEX].active).toBe(false);
+    const noOp = toggleVoiceSlotAccent(pocket, "snare", BEAT_ONE_INDEX);
+    const snareNoOp = noOp.voices.find((v) => v.instrument === "snare")!;
+    expect(snareNoOp.slots[BEAT_ONE_INDEX].accent).toBe(false);
+  });
+
+  it("sets the tempo without touching any voice data", () => {
+    const pocket = createPocketPattern(96);
+    const faster = withTempo(pocket, 128);
+    expect(faster.tempoBpm).toBe(128);
+    expect(faster.voices).toBe(pocket.voices);
   });
 });
