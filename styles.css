@@ -177,6 +177,10 @@ nav {
   position: relative;
   width: min(100%, 900px);
   height: clamp(140px, 25vh, 220px);
+
+  /* Reserved clearance for the annotation-note bands above/below, so
+     hand-drawn call-outs never overlap the engraved notation. */
+  margin: clamp(3.5rem, 9vh, 5rem) 0;
 }
 
 .staff,
@@ -248,19 +252,22 @@ nav {
   transition: opacity 300ms ease;
 }
 
+/* Anchored via `bottom`/`top: calc(100% + gap)` rather than `top: 0`/`bottom: 0`
+   so the note sits entirely in the margin reserved around .staff-frame above,
+   regardless of how many lines the copy wraps to — never over the notation. */
 .annotation-pos-upper-left {
-  top: 0;
+  bottom: calc(100% + 0.75rem);
   left: 0;
 }
 
 .annotation-pos-upper-right {
-  top: 0;
+  bottom: calc(100% + 0.75rem);
   right: 0;
   text-align: right;
 }
 
 .annotation-pos-lower-left {
-  bottom: 0;
+  top: calc(100% + 0.75rem);
   left: 0;
 }
 
@@ -329,6 +336,7 @@ nav {
 @media (width <= 780px) {
   .staff-frame {
     height: clamp(110px, 20vh, 170px);
+    margin: clamp(3rem, 11vh, 4rem) 0;
   }
 
   .annotation-note {
@@ -340,14 +348,12 @@ nav {
 
   .annotation-pos-upper-left,
   .annotation-pos-upper-right {
-    top: -3.25rem;
     right: 0;
     left: 0;
     text-align: center;
   }
 
   .annotation-pos-lower-left {
-    bottom: -3.25rem;
     right: 0;
     left: 0;
     text-align: center;

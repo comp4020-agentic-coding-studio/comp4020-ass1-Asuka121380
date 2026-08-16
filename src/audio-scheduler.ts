@@ -21,20 +21,39 @@ export interface Scheduler {
   readonly isRunning: boolean;
 }
 
+// The scheduler only ever touches these three members. Narrowing the
+// parameter to them (rather than the full `AudioContext`) lets tests supply
+// a fake clock with a controllable `currentTime` — jsdom has no real
+// `AudioContext`, same reasoning as title-screen.ts's injectable
+// `createAudioContext` and motion.ts's injectable `matchMedia`. A real
+// `AudioContext` still satisfies this type, so callers are unaffected.
+export type AudioClock = Pick<AudioContext, "currentTime" | "suspend" | "resume">;
+
 export function createScheduler(
-  audioContext: AudioContext,
+  audioContext: AudioClock,
   callbacks: SchedulerCallbacks,
 ): Scheduler {
   let currentSlot: EighthIndex = 0;
   let nextNoteTime = 0;
   let timerId: ReturnType<typeof setTimeout> | null = null;
   let running = false;
+  // start() always begins at slot 0, which is also a bar start — without
+  // this flag the very first tick() iteration would fire onBarBoundary
+  // before a single note has played, silently eating one bar's worth of
+  // Act I's "two full bars of listening" pacing.
+  let awaitingFirstBar = true;
 
   function tick(): void {
     while (nextNoteTime < audioContext.currentTime + SCHEDULE_AHEAD_SECONDS) {
       // Fire the boundary hook before reading the pattern for this slot, so a
       // pattern queued via onBarBoundary is the one this bar actually plays.
-      if (isBarStart(currentSlot)) callbacks.onBarBoundary(nextNoteTime);
+      if (isBarStart(currentSlot)) {
+        if (awaitingFirstBar) {
+          awaitingFirstBar = false;
+        } else {
+          callbacks.onBarBoundary(nextNoteTime);
+        }
+      }
 
       const pattern = callbacks.getRhythmState().currentPattern;
       const slot = pattern.voices[0]?.slots[currentSlot];
@@ -52,6 +71,7 @@ export function createScheduler(
       running = true;
       currentSlot = 0;
       nextNoteTime = audioContext.currentTime;
+      awaitingFirstBar = true;
       tick();
     },
     pause() {
