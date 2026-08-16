@@ -212,13 +212,15 @@ says about the developer you're becoming.
 
 ## Where the Beat Leans --- project rules
 
-This project is an interactive music explainer. The full design lives in
-`../EXHIBITION_FLOW.md` (outside the repo --- it's a Claude-facing production
-brief, not a submission artefact); `../REMAINING_EXHIBITION_IMPLEMENTATION.md`
-is the execution plan for Acts II--V, the laboratory, and the acknowledgement
-page. The Title + Act I baseline below was reviewed live in a real browser and
-approved as the visual/interaction baseline for the whole exhibition --- later
-acts extend this design system, they never redesign it.
+This project is a completed interactive music explainer: a title screen, five
+guided acts, a laboratory, and an acknowledgement page. The original production
+briefs (`EXHIBITION_FLOW.md` and `REMAINING_EXHIBITION_IMPLEMENTATION.md`) were
+kept outside the submission repository while the site was built; they are
+planning evidence, not runtime dependencies. The durable constraints derived
+from them are recorded here so this repository's harness remains self-contained.
+The Title + Act I baseline was reviewed live and approved as the visual and
+interaction system for the whole exhibition; the completed later scenes extend
+that system rather than redesigning it.
 
 - **VexFlow SVG is the only source of visitor-facing notation.** No raster
   notation images, no letter-grid substitutes (`K`/`S`/`B`). The
@@ -226,8 +228,8 @@ acts extend this design system, they never redesign it.
   replacement for engraved notation.
 - **Act I renders on a conventional five-line staff with a percussion clef**
   (`stave.addClef("percussion")`), one abstract voice on it --- not a
-  collapsed one-line staff. Acts III--V add a real drum-set staff (and, from
-  Act IV, a separate bass-clef staff below it) rather than replacing this one.
+  collapsed one-line staff. Act II retains that abstract voice; Acts III--V
+  render a real drum-set staff, and Acts IV--V add a separate bass-clef staff.
 
 ### Design system (locked --- extend, don't redesign)
 
@@ -252,15 +254,17 @@ rather than re-implementing:
   dasharray "draw-on" animation (`animateDrawOn`/`setPathFullyDrawn` in
   `main.ts`) for every arrow/underline. Reuse these helpers; don't hand-roll a
   second animation technique.
-- **Navigation**: upper-left hand-drawn back arrow (`.back-nav`, curved SVG
-  path + Caveat label naming the actual destination), upper-right sound
-  control (`.mute-toggle`) --- fixed `<header>` position, never per-scene
-  markup. There is never a forward "Next" button; progression is always
-  guided-interaction-at-a-bar-boundary followed by the fade transition below.
+- **Navigation**: upper-left hand-drawn return-to-title arrow (`.back-nav`,
+  curved SVG path + the static Caveat label `title`), upper-right sound control
+  (`.mute-toggle`) --- fixed `<header>` position, never per-scene markup. The
+  current implementation deliberately performs a clean restart at the title;
+  it does not claim to provide a previous-act back stack. There is never a
+  forward "Next" button; progression is always guided interaction at a bar
+  boundary followed by the fade transition below.
 - **Annotation crossfade**: one annotation visible at a time, driven by
   `syncAnnotation`'s two-phase fade-out-then-swap-in (`ANNOTATION_FADE_MS`),
-  gated on exhibition-state changes rather than wall-clock timers. Later acts
-  add new `AnnotationContent` cases; they don't rewrite the crossfade.
+  gated on exhibition-state changes rather than wall-clock timers. Acts II--V
+  add `AnnotationContent` cases without rewriting the crossfade.
   Scene-to-scene transitions reuse the same `title-screen-fading`/`*-active`
   opacity-toggle pattern, not a new transition mechanism per act.
   Note: the id union in `annotations.ts`/CSS selectors is act-agnostic (`"annotation-1"`
@@ -277,7 +281,7 @@ rather than re-implementing:
   control, or `contenteditable` region (`focusOwnsSpaceKey()`), so a Space
   press on the focused play-pause button (or any other control) never
   double-triggers, and `preventDefault()` on the handled key stops page
-  scroll. Any later act/lab control that itself has a Space meaning (e.g. a
+  scroll. Any added act/lab control that itself has a Space meaning (e.g. a
   focused preset button) must remain a real focusable element so this guard
   continues to defer to it correctly --- don't build a control that "looks
   focusable" without actually being one.
@@ -307,25 +311,25 @@ rather than re-implementing:
 - **Respect `prefers-reduced-motion`.** Disable stroke-draw and spatial
   movement; keep short opacity fades; the interaction must stay understandable.
 - **Local static assets only, with verified licences.** No runtime
-  third-party font/audio/API requests. Phase one's percussive voice is fully
-  synthesized via Web Audio (filtered noise burst + fast-decay envelope), a
-  deliberate deviation from bundling a sample file --- see the note below.
+  third-party font/audio/API requests. Every instrument voice is synthesized
+  locally with Web Audio rather than loaded from a sample file; see the final
+  audio decision below.
 - **Never accept a visually plausible score without checking it.** A score
   that renders without throwing is not the same as one that's musically
   correct; check clef, notehead line, beaming, and accent placement in a real
   browser before calling notation work done.
 - **Never commit a red `pnpm check` state.**
 
-### Deviation: synthesized percussion voice, not a bundled sample
+### Final audio decision: synthesized voices, not bundled samples
 
-`EXHIBITION_FLOW.md` section 3.4 asks for a bundled CC0 drum sample even in
-phase one. This build synthesizes the "dry, neutral practice-pad" hit instead
-(short generated noise buffer -> bandpass/highpass filter -> fast-decay
-`GainNode` envelope -> per-voice/master gain, the same routing the brief
-prescribes for a sample). Reasoning: the target sound is a textbook synthesis
-case; sourcing and correctly licensing a real sample under a same-day deadline
-is a real risk (dead link, unverifiable licence, wrong attribution) that
-synthesis sidesteps entirely; and it trivially satisfies "no third-party
-network request at runtime." Swapping in real hi-hat/snare/kick samples for
-Act III later is a drop-in change to the buffer-generation function only, not
-an architecture change.
+The original production brief asked for a bundled CC0 drum sample in Act I.
+This build instead synthesizes the dry practice-pad hit and the completed drum
+kit with local Web Audio nodes: filtered noise for the pad and hi-hat, filtered
+noise plus a short pitched body for the snare, and a downward-swept sine for the
+kick. The bass is intentionally not another low thump: it is a stable C3
+(130.8128 Hz) triangle oscillator through an 800 Hz lowpass with a slower attack
+and longer decay than the kick. That distinction was introduced after manual
+listening found the earlier 82 Hz sine too similar to the kick, then pinned down
+with an audio-graph regression test. Synthesis avoids dead links, unverifiable
+sample licences, and runtime network requests while keeping every voice inside
+the same per-voice/master-gain architecture.
