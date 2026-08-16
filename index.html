@@ -22,14 +22,16 @@
     </header>
     <main class="exhibition">
       <section class="title-screen" data-testid="title-screen">
-        <div class="title-staff" data-testid="title-staff" aria-hidden="true"></div>
-        <div class="title-copy">
+        <div class="title-heading-band">
+          <div class="title-staff" data-testid="title-staff" aria-hidden="true"></div>
           <h1 class="title-heading">Where the Beat Leans</h1>
+        </div>
+        <div class="title-copy">
           <p class="title-subtitle">
             Eight notes. One bar.<br />
             Where does the groove come from?
           </p>
-          <p class="title-sound-note">Sound on. Headphones help.</p>
+          <p class="title-sound-note">♪ Sound on. Headphones help.</p>
           <button type="button" class="start-button" data-testid="start-button">
             Tap to begin
           </button>
@@ -42,13 +44,14 @@
         <div class="staff-frame" data-testid="staff-frame">
           <div class="staff" data-testid="staff"></div>
           <div class="hit-targets" data-testid="hit-targets"></div>
+          <div class="beat-labels" data-testid="beat-labels" aria-hidden="true"></div>
+          <div class="playback-cursor" data-testid="playback-cursor" aria-hidden="true"></div>
           <div
             class="annotation-layer"
             data-testid="annotation-layer"
             aria-live="polite"
           ></div>
         </div>
-        <p class="beat-labels" aria-hidden="true">1 &amp; 2 &amp; 3 &amp; 4 &amp;</p>
         <div class="playback-controls">
           <button
             type="button"
@@ -58,6 +61,14 @@
             disabled
           >
             ▶ play
+          </button>
+          <button
+            type="button"
+            class="start-over"
+            data-testid="start-over"
+            disabled
+          >
+            ↺ Start over
           </button>
         </div>
       </section>

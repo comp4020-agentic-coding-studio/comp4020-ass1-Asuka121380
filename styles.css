@@ -6,6 +6,16 @@
   --pencil-blue: #526c7a;
 }
 
+/* Locally vendored, OFL-1.1-licensed (see ASSET_CREDITS.md) — no runtime
+   third-party font request. */
+@font-face {
+  font-family: Caveat;
+  src: url("./src/assets/fonts/Caveat-Variable.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -17,7 +27,10 @@ body {
 }
 
 body {
-  background: var(--paper);
+  background:
+    radial-gradient(ellipse 70% 55% at 18% 12%, var(--paper-light) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 90%, var(--paper-light) 0%, transparent 55%),
+    var(--paper);
   color: var(--ink);
   font-family: Georgia, "Times New Roman", serif;
   line-height: 1.5;
@@ -41,13 +54,22 @@ nav {
   min-width: 44px;
   min-height: 44px;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--graphite);
-  border-radius: 4px;
+  border: 1.5px solid var(--graphite);
+  border-radius: 44% 56% 51% 49% / 55% 45%;
   background: var(--paper-light);
   color: var(--graphite);
   font: inherit;
   font-size: clamp(0.75rem, 1.5vw, 0.9rem);
   cursor: pointer;
+  transform: rotate(-1deg);
+  transition: background 200ms ease, color 200ms ease;
+}
+
+.mute-toggle:hover,
+.mute-toggle:focus-visible {
+  background: var(--ink);
+  color: var(--paper-light);
+  border-color: var(--ink);
 }
 
 .mute-toggle:disabled {
@@ -88,14 +110,43 @@ nav {
   pointer-events: none;
 }
 
+/* The staff is scoped to this band, not the whole title screen — it reads
+   as ruled paper the heading sits on, and can never collide with the
+   subtitle/sound-note/button/keyboard-hint below, which stay in normal
+   document flow. */
+.title-heading-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(90%, 640px);
+  height: clamp(110px, 20vh, 160px);
+}
+
+/* Five faint ruled lines only — no clef/time-signature glyph here, so a
+   wrapped two-line heading (narrow viewports) never gets a solid symbol
+   sitting on top of a letter, just the same quiet "manuscript paper" texture
+   the single-line heading gets. */
 .title-staff {
   position: absolute;
   inset: 0;
-  margin: auto;
-  width: min(90%, 640px);
-  height: 160px;
-  opacity: 0.35;
+  z-index: 0;
+  opacity: 0.22;
   pointer-events: none;
+  background-image:
+    linear-gradient(var(--ink), var(--ink)),
+    linear-gradient(var(--ink), var(--ink)),
+    linear-gradient(var(--ink), var(--ink)),
+    linear-gradient(var(--ink), var(--ink)),
+    linear-gradient(var(--ink), var(--ink));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position:
+    0 0,
+    0 25%,
+    0 50%,
+    0 75%,
+    0 100%;
 }
 
 .title-copy {
@@ -109,6 +160,8 @@ nav {
 }
 
 .title-heading {
+  position: relative;
+  z-index: 1;
   margin: 0;
   font-size: clamp(1.75rem, 5vw, 3rem);
   font-weight: 700;
@@ -134,19 +187,22 @@ nav {
   padding: 0.75rem 2rem;
   margin-top: 0.5rem;
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 47% 53% 51% 49% / 56% 44%;
   background: var(--paper-light);
   color: var(--ink);
   font: inherit;
   font-size: clamp(1rem, 2.5vw, 1.25rem);
   font-weight: 700;
   cursor: pointer;
+  transform: rotate(-0.6deg);
+  transition: background 200ms ease, color 200ms ease, transform 150ms ease;
 }
 
 .start-button:hover,
 .start-button:focus-visible {
   background: var(--ink);
   color: var(--paper-light);
+  transform: rotate(0deg);
 }
 
 .title-keyboard-hint {
@@ -186,15 +242,35 @@ nav {
 .staff,
 .hit-targets,
 .annotation-layer,
-.annotation-arrows {
+.annotation-arrows,
+.beat-labels {
   position: absolute;
   inset: 0;
 }
 
 .hit-targets,
 .annotation-layer,
-.annotation-arrows {
+.annotation-arrows,
+.beat-labels {
   pointer-events: none;
+}
+
+.playback-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 46% 54% 52% 48% / 50% 46% 54% 50%;
+  background: var(--pencil-blue);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: left 120ms linear, top 120ms linear, opacity 200ms ease;
+}
+
+.playback-cursor-active {
+  opacity: 0.65;
 }
 
 .beat-target {
@@ -243,13 +319,33 @@ nav {
   max-width: min(60vw, 20rem);
   margin: 0;
   padding: clamp(0.75rem, 2vw, 1.5rem);
-  color: var(--graphite);
-  font-size: clamp(1rem, 2.2vw, 1.35rem);
-  line-height: 1.35;
+  color: var(--ink);
+  font-family: Caveat, cursive;
+  font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+  line-height: 1.25;
   text-align: left;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 300ms ease;
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+/* Small, fixed per-annotation rotation — genuinely handwritten-feeling
+   without randomising anything screenshots or tests would need to be
+   stable against. */
+.annotation-note[data-annotation-id="annotation-1"] {
+  transform: rotate(-1deg);
+}
+
+.annotation-note[data-annotation-id="annotation-2"] {
+  transform: rotate(1deg);
+}
+
+.annotation-note[data-annotation-id="annotation-3"] {
+  transform: rotate(-0.75deg);
+}
+
+.annotation-note[data-annotation-id="next-bar"] {
+  transform: rotate(1.25deg);
 }
 
 /* Anchored via `bottom`/`top: calc(100% + gap)` rather than `top: 0`/`bottom: 0`
@@ -297,16 +393,17 @@ nav {
   transition: stroke-dashoffset 600ms ease;
 }
 
-.beat-labels {
-  margin: 0;
-  font-size: clamp(0.9rem, 2.5vw, 1.15rem);
-  letter-spacing: 0.3em;
+.beat-label {
+  position: absolute;
+  transform: translate(-50%, 0.3rem);
+  font-size: clamp(0.85rem, 2vw, 1.05rem);
   color: var(--graphite);
 }
 
 .playback-controls {
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 1rem;
 }
 
 .play-pause {
@@ -314,21 +411,50 @@ nav {
   min-height: 44px;
   padding: 0.6rem 1.5rem;
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 48% 52% 50% 50% / 55% 45%;
   background: var(--paper-light);
   color: var(--ink);
   font: inherit;
   font-size: clamp(0.9rem, 2vw, 1.1rem);
   cursor: pointer;
+  transform: rotate(0.6deg);
+  transition: background 200ms ease, color 200ms ease, transform 150ms ease;
 }
 
 .play-pause:hover,
 .play-pause:focus-visible {
   background: var(--ink);
   color: var(--paper-light);
+  transform: rotate(0deg);
 }
 
 .play-pause:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.start-over {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: 1.5px dashed var(--graphite);
+  border-radius: 45% 55% 52% 48% / 50% 50% 52% 48%;
+  background: transparent;
+  color: var(--graphite);
+  font: inherit;
+  font-size: clamp(0.8rem, 1.8vw, 0.95rem);
+  cursor: pointer;
+  transform: rotate(-0.8deg);
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+.start-over:hover,
+.start-over:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.start-over:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -363,7 +489,8 @@ nav {
 @media (prefers-reduced-motion: reduce) {
   .title-screen,
   .score-stage,
-  .annotation-note {
+  .annotation-note,
+  .playback-cursor {
     transition-duration: 1ms;
   }
 
@@ -379,7 +506,8 @@ nav {
    outright rather than merely shortened — see main.ts). */
 html.reduced-motion .title-screen,
 html.reduced-motion .score-stage,
-html.reduced-motion .annotation-note {
+html.reduced-motion .annotation-note,
+html.reduced-motion .playback-cursor {
   transition-duration: 1ms;
 }
 

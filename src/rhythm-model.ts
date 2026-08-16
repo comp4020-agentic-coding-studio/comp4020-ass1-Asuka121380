@@ -34,6 +34,20 @@ export const EIGHTH_COUNT = 8;
 export const BEAT_ONE_INDEX: EighthIndex = 0;
 export const BEAT_THREE_INDEX: EighthIndex = 4;
 
+// Printed count row under the staff (EXHIBITION_FLOW.md section 6) — one
+// label per eighth-note slot, positioned against that slot's NoteBox in
+// main.ts rather than laid out as prose.
+export const EIGHTH_LABELS: readonly string[] = [
+  "1",
+  "&",
+  "2",
+  "&",
+  "3",
+  "&",
+  "4",
+  "&",
+];
+
 const BASE_VELOCITY = 0.6;
 const ACCENT_VELOCITY = 0.95;
 

@@ -14,8 +14,8 @@ import { renderPulseScore, type NoteBox } from "./src/notation";
 import {
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
+  EIGHTH_LABELS,
   applyPendingPattern,
-  createEmptyStavePattern,
   createInitialRhythmState,
   queuePendingPattern,
   withAccentsAt,
@@ -46,19 +46,21 @@ const hitTargetsContainer = document.querySelector<HTMLDivElement>(
 const annotationLayerEl = document.querySelector<HTMLDivElement>(
   '[data-testid="annotation-layer"]',
 );
-const titleStaffContainer = document.querySelector<HTMLDivElement>(
-  '[data-testid="title-staff"]',
-);
 const playPauseButton = document.querySelector<HTMLButtonElement>(
   '[data-testid="play-pause"]',
+);
+const startOverButton = document.querySelector<HTMLButtonElement>(
+  '[data-testid="start-over"]',
 );
 const muteToggle = document.querySelector<HTMLButtonElement>(
   '[data-testid="mute-toggle"]',
 );
-
-if (titleStaffContainer) {
-  renderPulseScore(titleStaffContainer, createEmptyStavePattern());
-}
+const beatLabelsContainer = document.querySelector<HTMLDivElement>(
+  '[data-testid="beat-labels"]',
+);
+const playbackCursor = document.querySelector<HTMLDivElement>(
+  '[data-testid="playback-cursor"]',
+);
 
 if (
   titleRoot &&
@@ -68,17 +70,23 @@ if (
   staffContainer &&
   hitTargetsContainer &&
   annotationLayerEl &&
-  playPauseButton
+  playPauseButton &&
+  startOverButton &&
+  beatLabelsContainer &&
+  playbackCursor
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
   const staffEl = staffContainer;
   const annotationLayer = annotationLayerEl;
+  const cursorEl = playbackCursor;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
   let muted = false;
   let currentAnnotationId: AnnotationContent["id"] | null = null;
+  let latestNoteBoxes: readonly NoteBox[] = [];
+  const cursorTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function createBeatTarget(index: EighthIndex): HTMLButtonElement {
     const button = document.createElement("button");
@@ -112,6 +120,14 @@ if (
     [BEAT_THREE_INDEX, createBeatTarget(BEAT_THREE_INDEX)],
   ]);
   for (const button of beatTargets.values()) hitTargetsContainer.append(button);
+
+  const beatLabelSpans = EIGHTH_LABELS.map((label) => {
+    const span = document.createElement("span");
+    span.className = "beat-label";
+    span.textContent = label;
+    beatLabelsContainer.append(span);
+    return span;
+  });
 
   const annotationNote = document.createElement("p");
   annotationNote.className = "annotation-note";
@@ -176,8 +192,10 @@ if (
       "annotation-note-visible",
     );
     annotationNote.replaceChildren();
+    delete annotationNote.dataset.annotationId;
     if (!annotation) return;
 
+    annotationNote.dataset.annotationId = annotation.id;
     annotationNote.classList.add(`annotation-pos-${annotation.position}`);
     annotation.lines.forEach((line, index) => {
       if (index > 0) annotationNote.append(document.createElement("br"));
@@ -291,12 +309,40 @@ if (
     }
   }
 
+  // One label per notehead, positioned directly under its NoteBox — the
+  // same geometry syncBeatTargets uses — rather than laid out as prose.
+  function syncBeatLabels(noteBoxes: readonly NoteBox[]): void {
+    beatLabelSpans.forEach((span, index) => {
+      const box = noteBoxes[index];
+      if (!box) {
+        span.style.display = "none";
+        return;
+      }
+      span.style.display = "";
+      span.style.left = `${box.x + box.w / 2}px`;
+      span.style.top = `${box.y + box.h}px`;
+    });
+  }
+
+  function clearCursorTimeouts(): void {
+    for (const id of cursorTimeouts) clearTimeout(id);
+    cursorTimeouts.clear();
+  }
+
+  function moveCursorTo(box: NoteBox): void {
+    cursorEl.style.left = `${box.x + box.w / 2}px`;
+    cursorEl.style.top = `${box.y + box.h / 2}px`;
+    cursorEl.classList.add("playback-cursor-active");
+  }
+
   function render(): void {
     const { noteBoxes } = renderPulseScore(staffEl, rhythmState.currentPattern);
+    latestNoteBoxes = noteBoxes;
     if (exhibitionState.screen === "exhibition") {
       stageEl.dataset.act1Step = exhibitionState.step;
     }
     syncBeatTargets(noteBoxes);
+    syncBeatLabels(noteBoxes);
     syncAnnotation(noteBoxes);
   }
 
@@ -308,8 +354,18 @@ if (
 
       scheduler = createScheduler(audioContext, {
         getRhythmState: () => rhythmState,
-        onNoteScheduled(_slotIndex, time, note) {
+        onNoteScheduled(slotIndex, time, note) {
           if (note.active) voice.trigger(time, note.velocity);
+          // The visual cursor is driven by this timeout, but the sound above
+          // was already scheduled against `time` on the audio clock — the
+          // timeout only decides when the *cursor* moves, never the audio.
+          const delayMs = Math.max(0, (time - audioContext.currentTime) * 1000);
+          const timeoutId = setTimeout(() => {
+            cursorTimeouts.delete(timeoutId);
+            const box = latestNoteBoxes[slotIndex];
+            if (box) moveCursorTo(box);
+          }, delayMs);
+          cursorTimeouts.add(timeoutId);
         },
         onBarBoundary() {
           rhythmState = applyPendingPattern(rhythmState);
@@ -322,6 +378,7 @@ if (
       playPauseButton.disabled = false;
       playPauseButton.textContent = "⏸ pause";
       playPauseButton.setAttribute("aria-pressed", "true");
+      startOverButton.disabled = false;
 
       if (muteToggle) {
         muteToggle.disabled = false;
@@ -339,6 +396,7 @@ if (
     if (!scheduler) return;
     if (scheduler.isRunning) {
       scheduler.pause();
+      clearCursorTimeouts();
       playPauseButton.textContent = "▶ play";
       playPauseButton.setAttribute("aria-pressed", "false");
     } else {
@@ -347,6 +405,17 @@ if (
         playPauseButton.setAttribute("aria-pressed", "true");
       });
     }
+  });
+
+  // Resets the teaching sequence only — rhythm/exhibition state and the
+  // cursor — never the scheduler or AudioContext, so audio keeps playing
+  // uninterrupted and no second gesture is required to hear sound again.
+  startOverButton.addEventListener("click", () => {
+    clearCursorTimeouts();
+    rhythmState = createInitialRhythmState();
+    exhibitionState = startExhibition();
+    cursorEl.classList.remove("playback-cursor-active");
+    render();
   });
 
   // Resizing must not lose Act I state or restart audio — re-render from the

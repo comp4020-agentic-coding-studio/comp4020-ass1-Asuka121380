@@ -287,6 +287,23 @@ describe("built page — title and Act I contract", () => {
     expect(hasName).toBe(true);
   });
 
+  it("the start-over control has an accessible name", () => {
+    expect(doc, NEXT_STEP).toBeTruthy();
+    const startOver = doc!.querySelector('[data-testid="start-over"]');
+    expect(startOver, NEXT_STEP).toBeTruthy();
+    const hasName =
+      !!startOver!.getAttribute("aria-label")?.trim() ||
+      !!startOver!.textContent?.trim();
+    expect(hasName).toBe(true);
+  });
+
+  it("the beat-labels overlay exists and is hidden from assistive tech", () => {
+    expect(doc, NEXT_STEP).toBeTruthy();
+    const beatLabels = doc!.querySelector('[data-testid="beat-labels"]');
+    expect(beatLabels, NEXT_STEP).toBeTruthy();
+    expect(beatLabels!.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("no element in the built markup carries an autoplay attribute", () => {
     expect(doc, NEXT_STEP).toBeTruthy();
     expect(doc!.querySelectorAll("[autoplay]").length).toBe(0);
