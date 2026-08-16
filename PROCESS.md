@@ -1,83 +1,72 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and each brief adds its own word count and moment count.
+A reading-guide to how the work came together --- a map to the process, not an
+essay about it.
 
 ## What I built
 
-One paragraph: the thing, and the idea behind it.
+The title screen and Act I ("Pulse") of *Where the Beat Leans*, a five-act
+interactive music explainer scoped down to a single vertical slice: a
+VexFlow-engraved percussion staff playing eight eighth notes on a synthesized
+practice-pad voice, three annotation call-outs that walk a visitor through
+"give the bar some weight," two real hit-target buttons on beats 1 and 3, and
+a bar-boundary-gated pattern swap into an accented, settled state --- all
+timed against `AudioContext.currentTime`, not `setTimeout`.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+1. **Reading the brief's own reference image against its prose, before
+   writing any renderer code.** `EXHIBITION_FLOW.md` could be read as asking
+   for a collapsed one-line rhythm staff, but the mood image showed a
+   conventional 5-line staff with a percussion clef. I locked the correct
+   reading in as a project rule before `notation.ts` existed, rather than
+   discovering the mismatch after building the wrong thing:
+   [`3d176d8`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/3d176d81ce7fcc24280d45eadcc846d40a9f2e34).
+   That rule is what `notation.ts`'s `stave.addClef("percussion")` was written
+   against from the first commit
+   ([`79ebe4c`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/79ebe4cc5300f4abf5260ff58ae323813a1dfb16)),
+   not a fix applied after a wrong first pass.
 
-1. **what happened** --- the problem, or the thing the agent got wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
+2. **Synthesizing the practice-pad hit instead of sourcing a bundled sample.**
+   The brief asks for a CC0 drum sample even in phase one, but under a
+   same-day deadline a mis-attributed or dead-linked sample was a real risk I
+   couldn't fully rule out, and the target sound ("dry, neutral, stick on a
+   practice pad") is a textbook synthesis case anyway. Rather than silently
+   swapping approaches, I wrote the deviation and its reasoning into
+   `CLAUDE.md` itself
+   ([`3d176d8`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/3d176d81ce7fcc24280d45eadcc846d40a9f2e34)),
+   then implemented it as a filtered-noise-burst-plus-envelope voice in
+   `src/audio-voices.ts`
+   ([`2a0d83c`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/2a0d83cb0dc07d828f9eaff240689e14345ab3e5)).
+   Checking it was right meant listening to it in the browser, since no
+   automated test can judge timbre.
 
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** rather than in another prompt --- a rule added to
-`CLAUDE.md`, a check wired up, an attempt thrown away: re-prompting until it
-passes is the routine case, and changing what the agent works against is the
-skilled one.
-
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
-
-### A worked moment, for shape
-
-Delete this section along with the rest of the boilerplate --- it's here to show
-the four jobs in one paragraph, not to be imitated in content.
-
-> The date formatter kept coming back with `toLocaleDateString()` and no locale
-> argument, so the same build rendered differently on my machine and in CI. I'd
-> already re-prompted it twice, which fixed the line but not the habit, so the
-> third time I put the rule in `CLAUDE.md` instead
-> ([`3f9ac21`](https://github.com/YOUR-ORG/YOUR-REPO/commit/3f9ac21)) and added
-> a spec test that fails on a bare `toLocaleDateString`. That's what told me it
-> had actually taken: the test went red against the old code and green against
-> the new, and the next two features it wrote passed it without prompting
-> ([`3f9ac21...b7e0d14`](https://github.com/YOUR-ORG/YOUR-REPO/compare/3f9ac21...b7e0d14)).
+3. **A real-browser pass at both marking viewports found two bugs that a
+   green `pnpm check` had already hidden.** After Milestone 5 landed with
+   62/62 tests passing
+   ([`c1ecba4`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/c1ecba4df4e5d9f85b98e26165226e492b8358d6)),
+   I loaded the page with `agent-browser` instead of trusting the green
+   check, per this project's own `CLAUDE.md` rule against accepting a
+   visually plausible score unchecked. An in-page timing log showed Act I
+   reaching `annotation-3` in ~7s instead of the intended ~10s, and a
+   screenshot showed the annotation text overlapping the staff. Tracing the
+   first bug back to `audio-scheduler.ts`'s look-ahead loop showed it fired
+   `onBarBoundary` on its own first tick, before any bar had actually played
+   --- a classic scheduler off-by-one that no unit test had caught, because
+   the module had no unit tests: it was documented as needing a real
+   browser. I fixed it with a one-flag guard and, rather than leave it
+   unverifiable again, extended this project's injectable-dependency pattern
+   (already used for `AudioContext` and `matchMedia`) to the scheduler's
+   clock, adding a fake-clock regression test that pins the fix down for any
+   future change. The layout bug I fixed by reserving margin around the
+   staff and anchoring annotation text outside it rather than flush against
+   its edge. Re-verifying live at 1920x1080 and 390x844 --- corrected timing,
+   both call-out arrows, keyboard-only interaction, `prefers-reduced-motion`,
+   and state surviving a mid-interaction resize --- is what told me it was
+   actually fixed, not just recompiled:
+   [`c1ecba4...2a0097c`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/compare/c1ecba4df4e5d9f85b98e26165226e492b8358d6...2a0097c718a64137e12e4499697dd510083bb476).
 
 ## Before you ship
 
-`pnpm check:evidence` verifies your citations resolve to real commits, that the
-current reflection entry is in `reflections/`, and that your `CLAUDE.md` is
-there --- before a marker ever opens the file. It checks that your map is
-traceable, not that it is good: the marker judges whether your small,
-deliberately chosen set of moments shows real judgement and reflection. A green
-check is not a substitute for that curation.
-
-Images are deliberately not checked, because whether one renders is visible the
-moment you look. Open this file on GitHub and look at it before you ship.
+`pnpm check:evidence` verifies the citations above resolve to real commits,
+that `reflections/assignment-1.md` exists, and that `CLAUDE.md` is present.
