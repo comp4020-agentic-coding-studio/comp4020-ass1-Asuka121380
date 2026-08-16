@@ -1,9 +1,11 @@
+import { audioTimeToPerformanceTime } from "./src/audio-clock-sync";
 import { createScheduler, type Scheduler } from "./src/audio-scheduler";
 import { createPracticePadVoice } from "./src/audio-voices";
 import { annotationForStep, type AnnotationContent } from "./src/annotations";
 import {
   ACT1_TARGETS,
   advanceBar,
+  returnToTitle,
   selectTarget,
   selectableTargets,
   startExhibition,
@@ -61,6 +63,9 @@ const beatLabelsContainer = document.querySelector<HTMLDivElement>(
 const playbackCursor = document.querySelector<HTMLDivElement>(
   '[data-testid="playback-cursor"]',
 );
+const backNavButton = document.querySelector<HTMLButtonElement>(
+  '[data-testid="back-nav"]',
+);
 
 if (
   titleRoot &&
@@ -73,7 +78,8 @@ if (
   playPauseButton &&
   startOverButton &&
   beatLabelsContainer &&
-  playbackCursor
+  playbackCursor &&
+  backNavButton
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
@@ -83,10 +89,17 @@ if (
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
+  let currentAudioContext: AudioContext | null = null;
+  let activeVoice: ReturnType<typeof createPracticePadVoice> | null = null;
   let muted = false;
   let currentAnnotationId: AnnotationContent["id"] | null = null;
   let latestNoteBoxes: readonly NoteBox[] = [];
   const cursorTimeouts = new Set<ReturnType<typeof setTimeout>>();
+  let annotationFadeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  // Kept in sync with .annotation-note's CSS transition duration in
+  // styles.css (~600-900ms band) — the swap-in is scheduled to happen only
+  // once the fade-out has actually finished, not on a guessed delay.
+  const ANNOTATION_FADE_MS = 700;
 
   function createBeatTarget(index: EighthIndex): HTMLButtonElement {
     const button = document.createElement("button");
@@ -146,12 +159,12 @@ if (
   underlineSvg.append(underlinePath);
   staffFrame.append(underlineSvg);
 
+  // Used when a mark's geometry is set for the first time at a new
+  // annotation's content-swap moment — animates the hand-drawn stroke in.
   function animateDrawOn(path: SVGPathElement): void {
     const length = path.getTotalLength();
     if (reducedMotion) {
-      path.style.transition = "none";
-      path.style.strokeDasharray = "";
-      path.style.strokeDashoffset = "0";
+      setPathFullyDrawn(path);
       return;
     }
     path.style.transition = "none";
@@ -164,6 +177,15 @@ if (
     requestAnimationFrame(() => {
       path.style.strokeDashoffset = "0";
     });
+  }
+
+  // Used when the *same* annotation's mark is merely being repositioned (a
+  // resize, or any render while nothing changed) — shows the mark already
+  // fully drawn instead of replaying the draw-on animation from scratch.
+  function setPathFullyDrawn(path: SVGPathElement): void {
+    path.style.transition = "none";
+    path.style.strokeDasharray = "";
+    path.style.strokeDashoffset = "0";
   }
 
   function appendAnnotationLine(
@@ -206,7 +228,11 @@ if (
     requestAnimationFrame(() => annotationNote.classList.add("annotation-note-visible"));
   }
 
-  function positionUnderline(annotation: AnnotationContent): void {
+  // `drawOn` is true only at a new annotation's content-swap moment; a plain
+  // reposition (resize, or any render of an unchanged annotation) passes
+  // false so the stroke stays in its already-drawn state instead of
+  // replaying the draw-on animation.
+  function positionUnderline(annotation: AnnotationContent, drawOn: boolean): void {
     if (!annotation.underlineWord) {
       underlineSvg.style.display = "none";
       return;
@@ -231,12 +257,14 @@ if (
       "d",
       `M1,6 Q${width / 2},${width > 20 ? 9 : 6} ${width - 1},5`,
     );
-    animateDrawOn(underlinePath);
+    if (drawOn) animateDrawOn(underlinePath);
+    else setPathFullyDrawn(underlinePath);
   }
 
   function positionArrows(
     annotation: AnnotationContent,
     noteBoxes: readonly NoteBox[],
+    drawOn: boolean,
   ): void {
     arrowsSvg.replaceChildren();
     const targets = annotation.arrowTargets ?? [];
@@ -262,26 +290,85 @@ if (
       path.setAttribute("class", "annotation-arrow-path");
       path.setAttribute("d", `M${startX},${startY} Q${controlX},${controlY} ${endX},${endY}`);
       arrowsSvg.append(path);
-      animateDrawOn(path);
+      if (drawOn) animateDrawOn(path);
+      else setPathFullyDrawn(path);
     }
   }
 
-  function syncAnnotation(noteBoxes: readonly NoteBox[]): void {
-    const annotation = annotationForStep(exhibitionState);
-    const changed = (annotation?.id ?? null) !== currentAnnotationId;
-    currentAnnotationId = annotation?.id ?? null;
+  function clearAnnotationFadeTimeout(): void {
+    if (annotationFadeTimeoutId !== null) {
+      clearTimeout(annotationFadeTimeoutId);
+      annotationFadeTimeoutId = null;
+    }
+  }
 
-    if (changed) renderAnnotationContent(annotation);
+  // Cancels any in-flight fade and clears the annotation outright — used by
+  // a hard reset (start-over, or the back-navigation in returnToTitle) so a
+  // pending crossfade never resolves into a screen that's already gone.
+  function resetAnnotationDisplay(): void {
+    clearAnnotationFadeTimeout();
+    annotationNote.classList.remove(
+      "annotation-pos-upper-left",
+      "annotation-pos-upper-right",
+      "annotation-pos-lower-left",
+      "annotation-note-visible",
+    );
+    annotationNote.replaceChildren();
+    delete annotationNote.dataset.annotationId;
+    underlineSvg.style.display = "none";
+    arrowsSvg.style.display = "none";
+    currentAnnotationId = null;
+  }
 
+  function swapAnnotationIn(annotation: AnnotationContent | null): void {
+    annotationFadeTimeoutId = null;
+    renderAnnotationContent(annotation);
     if (!annotation) {
       underlineSvg.style.display = "none";
       arrowsSvg.style.display = "none";
       return;
     }
+    // Uses the latest known note layout rather than whatever was passed in
+    // when the fade-out started — a resize during the wait must not leave
+    // the arrows pointing at stale coordinates.
     requestAnimationFrame(() => {
-      positionUnderline(annotation);
-      positionArrows(annotation, noteBoxes);
+      positionUnderline(annotation, true);
+      positionArrows(annotation, latestNoteBoxes, true);
     });
+  }
+
+  function syncAnnotation(noteBoxes: readonly NoteBox[]): void {
+    const annotation = annotationForStep(exhibitionState);
+    const nextId = annotation?.id ?? null;
+    const changed = nextId !== currentAnnotationId;
+
+    if (!changed) {
+      // Nothing changed — reposition the existing marks (e.g. a resize)
+      // without re-triggering the fade or the arrow/underline draw-on.
+      if (annotation) {
+        requestAnimationFrame(() => {
+          positionUnderline(annotation, false);
+          positionArrows(annotation, noteBoxes, false);
+        });
+      }
+      return;
+    }
+
+    currentAnnotationId = nextId;
+    clearAnnotationFadeTimeout();
+
+    // No fade-out to wait for when nothing was visible yet (the very first
+    // annotation) or when motion is reduced — swap straight to a fade-in.
+    const wasVisible = annotationNote.classList.contains("annotation-note-visible");
+    const fadeOutMs = reducedMotion || !wasVisible ? 0 : ANNOTATION_FADE_MS;
+
+    if (fadeOutMs === 0) {
+      swapAnnotationIn(annotation);
+      return;
+    }
+
+    annotationNote.classList.remove("annotation-note-visible");
+    annotationFadeTimeoutId = setTimeout(() => swapAnnotationIn(annotation), fadeOutMs);
   }
 
   function syncBeatTargets(noteBoxes: readonly NoteBox[]): void {
@@ -346,20 +433,31 @@ if (
     syncAnnotation(noteBoxes);
   }
 
-  initTitleScreen({
+  const titleHandles = initTitleScreen({
     elements: { root: titleRoot, startButton, stage },
     onActivated(audioContext) {
+      currentAudioContext = audioContext;
+      // A return-to-title can re-arm this same activation path, so state
+      // is reset here too (not just in the back-nav handler) to guarantee
+      // a fresh Act I every time, regardless of what ended the last visit.
+      rhythmState = createInitialRhythmState();
+      exhibitionState = startExhibition();
       const voice = createPracticePadVoice(audioContext);
+      activeVoice = voice;
       render();
 
       scheduler = createScheduler(audioContext, {
         getRhythmState: () => rhythmState,
         onNoteScheduled(slotIndex, time, note) {
-          if (note.active) voice.trigger(time, note.velocity);
+          if (note.active) voice.trigger(time, note.velocity, note.accent);
           // The visual cursor is driven by this timeout, but the sound above
           // was already scheduled against `time` on the audio clock — the
           // timeout only decides when the *cursor* moves, never the audio.
-          const delayMs = Math.max(0, (time - audioContext.currentTime) * 1000);
+          // The delay is computed from the output-latency-aware wall-clock
+          // mapping, not a bare currentTime subtraction, so the marker
+          // arrives when the note is actually audible rather than early.
+          const targetPerformanceTime = audioTimeToPerformanceTime(audioContext, time);
+          const delayMs = Math.max(0, targetPerformanceTime - performance.now());
           const timeoutId = setTimeout(() => {
             cursorTimeouts.delete(timeoutId);
             const box = latestNoteBoxes[slotIndex];
@@ -379,18 +477,28 @@ if (
       playPauseButton.textContent = "⏸ pause";
       playPauseButton.setAttribute("aria-pressed", "true");
       startOverButton.disabled = false;
+      backNavButton.hidden = false;
 
       if (muteToggle) {
         muteToggle.disabled = false;
-        muteToggle.addEventListener("click", () => {
-          muted = !muted;
-          voice.masterGain.gain.value = muted ? 0 : 1;
-          muteToggle.textContent = muted ? "sound off" : "sound on";
-          muteToggle.setAttribute("aria-pressed", String(muted));
-        });
+        muteToggle.textContent = muted ? "sound off" : "sound on";
+        muteToggle.setAttribute("aria-pressed", String(muted));
       }
     },
   });
+
+  // Attached once — `onActivated` can now re-fire (after a return-to-title
+  // and a fresh start), and re-adding a listener here every time would stack
+  // duplicate handlers that double-toggle mute on a single click.
+  if (muteToggle) {
+    muteToggle.addEventListener("click", () => {
+      if (!activeVoice) return;
+      muted = !muted;
+      activeVoice.masterGain.gain.value = muted ? 0 : 1;
+      muteToggle.textContent = muted ? "sound off" : "sound on";
+      muteToggle.setAttribute("aria-pressed", String(muted));
+    });
+  }
 
   playPauseButton.addEventListener("click", () => {
     if (!scheduler) return;
@@ -412,9 +520,59 @@ if (
   // uninterrupted and no second gesture is required to hear sound again.
   startOverButton.addEventListener("click", () => {
     clearCursorTimeouts();
+    resetAnnotationDisplay();
     rhythmState = createInitialRhythmState();
     exhibitionState = startExhibition();
     cursorEl.classList.remove("playback-cursor-active");
+    render();
+  });
+
+  // Every act must let the visitor return to the title screen — never a
+  // forward "Next". This tears the departing act down completely (per
+  // CLAUDE.md, an AudioContext may only ever be constructed inside
+  // title-screen.ts, so this one is closed rather than merely muted) and
+  // re-arms the title screen's first-activation path for a clean restart.
+  backNavButton.addEventListener("click", () => {
+    clearCursorTimeouts();
+    resetAnnotationDisplay();
+    cursorEl.classList.remove("playback-cursor-active");
+
+    const closingScheduler = scheduler;
+    const closingAudioContext = currentAudioContext;
+    const closingVoice = activeVoice;
+    scheduler = null;
+    currentAudioContext = null;
+    activeVoice = null;
+
+    if (closingVoice && closingAudioContext) {
+      closingVoice.masterGain.gain.linearRampToValueAtTime(
+        0,
+        closingAudioContext.currentTime + 0.05,
+      );
+    }
+    closingScheduler?.destroy();
+    void closingAudioContext?.close();
+
+    rhythmState = createInitialRhythmState();
+    exhibitionState = returnToTitle();
+    muted = false;
+
+    backNavButton.hidden = true;
+    playPauseButton.disabled = true;
+    playPauseButton.textContent = "▶ play";
+    playPauseButton.setAttribute("aria-pressed", "false");
+    startOverButton.disabled = true;
+    if (muteToggle) {
+      muteToggle.disabled = true;
+      muteToggle.textContent = "sound on";
+      muteToggle.setAttribute("aria-pressed", "false");
+    }
+
+    delete stageEl.dataset.act1Step;
+    stageEl.classList.remove("score-stage-active");
+    titleRoot.classList.remove("title-screen-fading");
+    titleHandles.reset();
+
     render();
   });
 

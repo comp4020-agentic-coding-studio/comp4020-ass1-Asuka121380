@@ -48,8 +48,12 @@ export const EIGHTH_LABELS: readonly string[] = [
   "&",
 ];
 
-const BASE_VELOCITY = 0.6;
-const ACCENT_VELOCITY = 0.95;
+// A real-browser listening pass found the prior 0.6/0.95 pairing (~1.6x, a
+// ~4dB gain difference) too subtle to read as "accented" by ear — widened to
+// a >2.5x ratio (>=8dB) so ordinary beats sit back and the accented beats are
+// unmistakably heavier, not just marginally louder.
+const BASE_VELOCITY = 0.4;
+const ACCENT_VELOCITY = 1.0;
 
 export function createPulsePattern(tempoBpm = 96): RhythmPattern {
   const slots: NoteEvent[] = Array.from({ length: EIGHTH_COUNT }, () => ({

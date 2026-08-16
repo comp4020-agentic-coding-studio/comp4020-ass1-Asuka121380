@@ -119,16 +119,25 @@ describe("exhibition state — Act I", () => {
     expect(state.step).toBe("annotation-1");
   });
 
-  it("one further bar advances annotation-1 to annotation-2", () => {
+  it("one bar into annotation-1 is not yet enough to advance", () => {
     let state = startExhibition();
     state = advanceBar(advanceBar(state));
     state = advanceBar(state);
     if (state.screen !== "exhibition") throw new Error("unreachable");
+    expect(state.step).toBe("annotation-1");
+  });
+
+  it("two further bars advance annotation-1 to annotation-2", () => {
+    let state = startExhibition();
+    state = advanceBar(advanceBar(state));
+    state = advanceBar(advanceBar(state));
+    if (state.screen !== "exhibition") throw new Error("unreachable");
     expect(state.step).toBe("annotation-2");
   });
 
-  it("one further bar advances annotation-2 to annotation-3, where beats 1 and 3 become selectable", () => {
+  it("two further bars advance annotation-2 to annotation-3, where beats 1 and 3 become selectable", () => {
     let state = startExhibition();
+    state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     if (state.screen !== "exhibition") throw new Error("unreachable");
@@ -138,6 +147,7 @@ describe("exhibition state — Act I", () => {
 
   function reachAnnotation3() {
     let state = startExhibition();
+    state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     return state;
@@ -197,7 +207,7 @@ describe("annotations — Act I", () => {
   it("shows annotation 2 upper-right with 'flat' underlined", () => {
     let state = startExhibition();
     state = advanceBar(advanceBar(state));
-    state = advanceBar(state);
+    state = advanceBar(advanceBar(state));
     const annotation = annotationForStep(state);
     expect(annotation?.id).toBe("annotation-2");
     expect(annotation?.position).toBe("upper-right");
@@ -206,6 +216,7 @@ describe("annotations — Act I", () => {
 
   it("shows annotation 3 lower-left with arrows to beats 1 and 3", () => {
     let state = startExhibition();
+    state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     const annotation = annotationForStep(state);
@@ -218,6 +229,7 @@ describe("annotations — Act I", () => {
     let state = startExhibition();
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
+    state = advanceBar(advanceBar(state));
     state = selectTarget(state, BEAT_ONE_INDEX);
     state = selectTarget(state, BEAT_THREE_INDEX);
     const annotation = annotationForStep(state);
@@ -227,6 +239,7 @@ describe("annotations — Act I", () => {
 
   it("shows no annotation once Act I has settled", () => {
     let state = startExhibition();
+    state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     state = advanceBar(advanceBar(state));
     state = selectTarget(state, BEAT_ONE_INDEX);
@@ -274,7 +287,11 @@ describe("built page — title and Act I contract", () => {
       '[data-testid="start-button"]',
     );
     expect(start, NEXT_STEP).toBeTruthy();
-    expect(start!.textContent?.trim()).not.toBe("");
+    // The start surface is now a transparent full-screen hit-area with no
+    // visible text — its accessible name comes from aria-label instead.
+    const hasName =
+      !!start!.getAttribute("aria-label")?.trim() || !!start!.textContent?.trim();
+    expect(hasName).toBe(true);
   });
 
   it("the play/pause control has an accessible name", () => {
@@ -295,6 +312,18 @@ describe("built page — title and Act I contract", () => {
       !!startOver!.getAttribute("aria-label")?.trim() ||
       !!startOver!.textContent?.trim();
     expect(hasName).toBe(true);
+  });
+
+  it("the back-navigation control has an accessible name and starts hidden", () => {
+    expect(doc, NEXT_STEP).toBeTruthy();
+    const backNav = doc!.querySelector('[data-testid="back-nav"]');
+    expect(backNav, NEXT_STEP).toBeTruthy();
+    const hasName =
+      !!backNav!.getAttribute("aria-label")?.trim() ||
+      !!backNav!.textContent?.trim();
+    expect(hasName).toBe(true);
+    // Never visible on the title screen itself — only after activation.
+    expect(backNav!.hasAttribute("hidden")).toBe(true);
   });
 
   it("the beat-labels overlay exists and is hidden from assistive tech", () => {

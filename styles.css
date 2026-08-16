@@ -41,13 +41,65 @@ header {
   position: fixed;
   top: env(safe-area-inset-top, 0);
   right: env(safe-area-inset-right, 0);
+  left: env(safe-area-inset-left, 0);
   z-index: 10;
   padding: 0.75rem;
 }
 
 nav {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+}
+
+/* Understated by design — no border/background rectangle, a small
+   hand-drawn arrow instead, so it never reads as a competing "Next"-style
+   button. Padding (not the visible mark) carries the >=44x44 touch target. */
+.back-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--graphite);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 200ms ease, color 200ms ease;
+}
+
+.back-nav[hidden] {
+  display: none;
+}
+
+.back-nav:hover,
+.back-nav:focus-visible {
+  color: var(--ink);
+  opacity: 1;
+}
+
+.back-nav:focus-visible {
+  outline: 2px dashed var(--ink);
+  outline-offset: 2px;
+}
+
+.back-nav-arrow {
+  width: 22px;
+  height: 16px;
+}
+
+.back-nav-arrow path {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.back-nav-label {
+  font-family: Caveat, cursive;
+  font-size: clamp(1rem, 2.2vw, 1.2rem);
 }
 
 .mute-toggle {
@@ -163,51 +215,47 @@ nav {
   position: relative;
   z-index: 1;
   margin: 0;
-  font-size: clamp(1.75rem, 5vw, 3rem);
+  font-family: Caveat, cursive;
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
   font-weight: 700;
-  letter-spacing: 0.03em;
 }
 
 .title-subtitle {
   margin: 0;
-  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  font-family: Caveat, cursive;
+  font-size: clamp(1.3rem, 3.2vw, 1.65rem);
   color: var(--ink);
 }
 
 .title-sound-note {
   margin: 0;
-  font-size: clamp(0.85rem, 2vw, 1rem);
+  font-family: Caveat, cursive;
+  font-size: clamp(1.1rem, 2.6vw, 1.3rem);
   color: var(--graphite);
-  font-style: italic;
 }
 
+/* A transparent full-screen hit-area rather than a visible button — the
+   whole title screen is the "tap to begin" surface. Still a real <button>
+   with an accessible name and visible keyboard focus, per the requirement
+   that the semantic start action survive an invisible visual presentation. */
 .start-button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0.75rem 2rem;
-  margin-top: 0.5rem;
-  border: 2px solid var(--ink);
-  border-radius: 47% 53% 51% 49% / 56% 44%;
-  background: var(--paper-light);
-  color: var(--ink);
-  font: inherit;
-  font-size: clamp(1rem, 2.5vw, 1.25rem);
-  font-weight: 700;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  transform: rotate(-0.6deg);
-  transition: background 200ms ease, color 200ms ease, transform 150ms ease;
 }
 
-.start-button:hover,
 .start-button:focus-visible {
-  background: var(--ink);
-  color: var(--paper-light);
-  transform: rotate(0deg);
+  outline: 2px dashed var(--ink);
+  outline-offset: -8px;
 }
 
-.title-keyboard-hint {
-  margin: 0;
-  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+.title-prompt {
+  margin: 0.5rem 0 0;
+  font-family: Caveat, cursive;
+  font-size: clamp(1.2rem, 2.8vw, 1.5rem);
   color: var(--graphite);
 }
 
@@ -266,7 +314,7 @@ nav {
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -50%);
-  transition: left 120ms linear, top 120ms linear, opacity 200ms ease;
+  transition: left 40ms linear, top 40ms linear, opacity 200ms ease;
 }
 
 .playback-cursor-active {
@@ -326,7 +374,7 @@ nav {
   text-align: left;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 300ms ease, transform 300ms ease;
+  transition: opacity 700ms ease, transform 700ms ease;
 }
 
 /* Small, fixed per-annotation rotation — genuinely handwritten-feeling

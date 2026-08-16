@@ -30,10 +30,13 @@ export const ACT1_TARGETS: readonly EighthIndex[] = [
   BEAT_THREE_INDEX,
 ];
 
-// Bars required in "listening" before annotation-1 fires, then one bar per
-// subsequent annotation step (see EXHIBITION_FLOW.md section 6).
+// Bars required in "listening" before annotation-1 fires, then how long each
+// of annotation-1/annotation-2 holds before advancing (see EXHIBITION_FLOW.md
+// section 6). A real-browser pass found a 1-bar hold too quick to read —
+// each annotation now gets a full 2 bars before the next one fades in.
+// annotation-3 is unaffected: it waits on selectTarget(), not bar count.
 const BARS_BEFORE_ANNOTATION_1 = 2;
-const BARS_PER_STEP = 1;
+const BARS_PER_ANNOTATION_STEP = 2;
 
 export function startExhibition(): ExhibitionState {
   return {
@@ -43,6 +46,13 @@ export function startExhibition(): ExhibitionState {
     barsInStep: 0,
     selectedTargets: new Set(),
   };
+}
+
+// Every act must let the visitor return to the title screen (never a
+// forward "Next") — this is the reusable transition later acts' own
+// back-navigation will call, alongside Act I's.
+export function returnToTitle(): ExhibitionState {
+  return { screen: "title" };
 }
 
 export function selectableTargets(
@@ -65,11 +75,11 @@ export function advanceBar(state: ExhibitionState): ExhibitionState {
         ? { ...state, step: "annotation-1", barsInStep: 0 }
         : { ...state, barsInStep };
     case "annotation-1":
-      return barsInStep >= BARS_PER_STEP
+      return barsInStep >= BARS_PER_ANNOTATION_STEP
         ? { ...state, step: "annotation-2", barsInStep: 0 }
         : { ...state, barsInStep };
     case "annotation-2":
-      return barsInStep >= BARS_PER_STEP
+      return barsInStep >= BARS_PER_ANNOTATION_STEP
         ? { ...state, step: "annotation-3", barsInStep: 0 }
         : { ...state, barsInStep };
     case "annotation-3":

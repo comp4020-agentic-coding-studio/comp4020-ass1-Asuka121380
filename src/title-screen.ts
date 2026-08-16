@@ -16,6 +16,10 @@ export interface TitleScreenOptions {
 
 export interface TitleScreenHandles {
   destroy(): void;
+  // Re-arms activation after a "return to title" navigation, so the exact
+  // same first-time activation path (including a fresh AudioContext) can
+  // run again on a subsequent click/keypress.
+  reset(): void;
 }
 
 export function initTitleScreen(options: TitleScreenOptions): TitleScreenHandles {
@@ -37,11 +41,27 @@ export function initTitleScreen(options: TitleScreenOptions): TitleScreenHandles
     onActivated(audioContext);
   }
 
+  // The start surface is a real, focusable <button>, but native Enter/Space
+  // semantics only fire once it already holds focus — nothing grants that on
+  // page load, so a document-level listener is needed for the keys to
+  // actually work while the title screen is active (not merely claimed to).
+  function handleKeydown(event: KeyboardEvent): void {
+    if (activated) return;
+    if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") return;
+    event.preventDefault();
+    activate();
+  }
+
   elements.startButton.addEventListener("click", activate);
+  document.addEventListener("keydown", handleKeydown);
 
   return {
     destroy() {
       elements.startButton.removeEventListener("click", activate);
+      document.removeEventListener("keydown", handleKeydown);
+    },
+    reset() {
+      activated = false;
     },
   };
 }

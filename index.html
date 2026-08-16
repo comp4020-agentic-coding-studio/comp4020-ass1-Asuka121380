@@ -11,6 +11,24 @@
       <nav aria-label="Primary">
         <button
           type="button"
+          class="back-nav"
+          data-testid="back-nav"
+          aria-label="Return to title"
+          hidden
+        >
+          <svg
+            class="back-nav-arrow"
+            viewBox="0 0 32 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M28,12 Q14,4 6,12" />
+            <path d="M11,6 L6,12 L13,15" />
+          </svg>
+          <span class="back-nav-label">title</span>
+        </button>
+        <button
+          type="button"
           class="mute-toggle"
           data-testid="mute-toggle"
           aria-pressed="false"
@@ -32,11 +50,14 @@
             Where does the groove come from?
           </p>
           <p class="title-sound-note">♪ Sound on. Headphones help.</p>
-          <button type="button" class="start-button" data-testid="start-button">
-            Tap to begin
-          </button>
-          <p class="title-keyboard-hint">or press Enter</p>
+          <p class="title-prompt">click anywhere to begin</p>
         </div>
+        <button
+          type="button"
+          class="start-button"
+          data-testid="start-button"
+          aria-label="Begin the exhibition"
+        ></button>
       </section>
 
       <section class="score-stage" data-testid="score-stage">

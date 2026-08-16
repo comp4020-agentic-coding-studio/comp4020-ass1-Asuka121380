@@ -3,6 +3,8 @@ import {
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
   EIGHTH_LABELS,
+  createPulsePattern,
+  withAccentsAt,
 } from "./rhythm-model";
 
 describe("rhythm model — eighth-note labels", () => {
@@ -20,5 +22,20 @@ describe("rhythm model — eighth-note labels", () => {
     expect(EIGHTH_LABELS[3]).toBe("&");
     expect(EIGHTH_LABELS[5]).toBe("&");
     expect(EIGHTH_LABELS[7]).toBe("&");
+  });
+});
+
+describe("rhythm model — accent contrast", () => {
+  it("accents a beat with a meaningfully larger, still-valid velocity", () => {
+    const base = createPulsePattern();
+    const accented = withAccentsAt(base, [BEAT_ONE_INDEX, BEAT_THREE_INDEX]);
+    const baseVelocity = base.voices[0].slots[1].velocity;
+    const accentVelocity = accented.voices[0].slots[BEAT_ONE_INDEX].velocity;
+
+    // A real-browser listening pass found ~1.6x too subtle to read as
+    // "accented" by ear — this pins the fix to a genuinely large ratio.
+    expect(accentVelocity / baseVelocity).toBeGreaterThanOrEqual(2.5);
+    expect(baseVelocity).toBeGreaterThan(0);
+    expect(accentVelocity).toBeLessThanOrEqual(1);
   });
 });
