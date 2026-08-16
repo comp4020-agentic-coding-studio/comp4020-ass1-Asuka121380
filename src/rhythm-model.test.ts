@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  BASIC_KICK_INDICES,
   BEAT_FOUR_INDEX,
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
   BEAT_TWO_INDEX,
   EIGHTH_LABELS,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  OFFBEAT_KICK_INDICES,
+  SYNCOPATED_KICK_INDICES,
+  createDrumKitPattern,
   createPulsePattern,
   withAccentsAt,
+  withKickIndices,
 } from "./rhythm-model";
 
 describe("rhythm model — eighth-note labels", () => {
@@ -56,5 +62,51 @@ describe("rhythm model — accent contrast", () => {
     expect(slots[BEAT_THREE_INDEX].accent).toBe(false);
     expect(slots[BEAT_ONE_INDEX].velocity).toBe(slots[1].velocity);
     expect(slots[BEAT_THREE_INDEX].velocity).toBe(slots[1].velocity);
+  });
+});
+
+describe("rhythm model — Act III drum kit", () => {
+  it("builds three simultaneous voices: hi-hat on every eighth, snare on 2 and 4, kick at the given indices", () => {
+    const pattern = createDrumKitPattern(96, BASIC_KICK_INDICES);
+    expect(pattern.voices).toHaveLength(3);
+
+    const hihat = pattern.voices.find((v) => v.instrument === "hihat-closed");
+    const snare = pattern.voices.find((v) => v.instrument === "snare");
+    const kick = pattern.voices.find((v) => v.instrument === "kick");
+    expect(hihat && snare && kick).toBeTruthy();
+
+    expect(hihat!.slots.every((slot) => slot.active)).toBe(true);
+
+    expect(snare!.slots[BEAT_TWO_INDEX].active).toBe(true);
+    expect(snare!.slots[BEAT_FOUR_INDEX].active).toBe(true);
+    expect(snare!.slots[BEAT_ONE_INDEX].active).toBe(false);
+    expect(snare!.slots[BEAT_THREE_INDEX].active).toBe(false);
+
+    expect(kick!.slots[BEAT_ONE_INDEX].active).toBe(true);
+    expect(kick!.slots[BEAT_THREE_INDEX].active).toBe(true);
+    expect(kick!.slots[BEAT_TWO_INDEX].active).toBe(false);
+  });
+
+  it("re-derives only the kick voice's slots, leaving hi-hat and snare untouched", () => {
+    const basic = createDrumKitPattern(96, BASIC_KICK_INDICES);
+    const offbeat = withKickIndices(basic, OFFBEAT_KICK_INDICES);
+
+    const kick = offbeat.voices.find((v) => v.instrument === "kick")!;
+    expect(kick.slots[BEAT_ONE_INDEX].active).toBe(true);
+    expect(kick.slots[OFFBEAT_AFTER_BEAT_TWO_INDEX].active).toBe(true);
+    expect(kick.slots[BEAT_THREE_INDEX].active).toBe(false);
+
+    const hihat = offbeat.voices.find((v) => v.instrument === "hihat-closed")!;
+    const snare = offbeat.voices.find((v) => v.instrument === "snare")!;
+    expect(hihat.slots.every((slot) => slot.active)).toBe(true);
+    expect(snare.slots[BEAT_TWO_INDEX].active).toBe(true);
+    expect(snare.slots[BEAT_FOUR_INDEX].active).toBe(true);
+
+    const syncopated = withKickIndices(offbeat, SYNCOPATED_KICK_INDICES);
+    const syncopatedKick = syncopated.voices.find((v) => v.instrument === "kick")!;
+    expect(syncopatedKick.slots[BEAT_ONE_INDEX].active).toBe(true);
+    expect(syncopatedKick.slots[OFFBEAT_AFTER_BEAT_TWO_INDEX].active).toBe(true);
+    expect(syncopatedKick.slots[BEAT_FOUR_INDEX].active).toBe(true);
+    expect(syncopatedKick.slots[BEAT_THREE_INDEX].active).toBe(false);
   });
 });

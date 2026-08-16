@@ -1,5 +1,5 @@
-export type Instrument = "practice-pad";
-// Extension seam for Act III onward: | "hihat-closed" | "snare" | "kick" | "bass"
+export type Instrument = "practice-pad" | "hihat-closed" | "snare" | "kick";
+// Extension seam for Act IV onward: | "bass"
 
 export type EighthIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -35,6 +35,9 @@ export const BEAT_ONE_INDEX: EighthIndex = 0;
 export const BEAT_TWO_INDEX: EighthIndex = 2;
 export const BEAT_THREE_INDEX: EighthIndex = 4;
 export const BEAT_FOUR_INDEX: EighthIndex = 6;
+// The eighth-note slot immediately after beat 2 — Act III's first kick move
+// (EXHIBITION_FLOW.md section 8) pulls the kick from beat 3 onto this slot.
+export const OFFBEAT_AFTER_BEAT_TWO_INDEX: EighthIndex = 3;
 
 // Printed count row under the staff (EXHIBITION_FLOW.md section 6) — one
 // label per eighth-note slot, positioned against that slot's NoteBox in
@@ -103,6 +106,101 @@ export function withAccentsAt(
   }));
 
   return { ...pattern, id: `${pattern.id}-accented`, voices };
+}
+
+// Act III's three named kick placements (EXHIBITION_FLOW.md section 8): the
+// "basic kit" grounds 1 and 3 like a plain backbeat groove; the temporary
+// pattern is the mid-lesson state right after the first guided move (kick
+// pulled off beat 3 onto the offbeat after 2, beat 1 unchanged); the
+// syncopated pattern is the finished "3-3-2" groove (kick on 1, the offbeat
+// after 2, and 4) the Laboratory later seeds from.
+export const BASIC_KICK_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  BEAT_THREE_INDEX,
+];
+export const OFFBEAT_KICK_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+];
+export const SYNCOPATED_KICK_INDICES: readonly EighthIndex[] = [
+  BEAT_ONE_INDEX,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  BEAT_FOUR_INDEX,
+];
+
+function drumVoiceSlots(
+  instrument: Instrument,
+  activeAt: (index: EighthIndex) => boolean,
+): NoteEvent[] {
+  return Array.from({ length: EIGHTH_COUNT }, (_, i) => {
+    const index = i as EighthIndex;
+    const active = activeAt(index);
+    return {
+      active,
+      instrument,
+      velocity: active ? BASE_VELOCITY : 0,
+      accent: false,
+      duration: "8",
+    };
+  });
+}
+
+// Act III's real drum kit (EXHIBITION_FLOW.md section 8): a hi-hat voice
+// keeping every eighth note, a snare on the backbeat (2 and 4), and a kick
+// whose placement is the taught, changing variable — passed in as
+// `kickIndices` so the same factory builds the basic groove, the temporary
+// post-first-move groove, and the finished 3-3-2 groove.
+export function createDrumKitPattern(
+  tempoBpm = 96,
+  kickIndices: readonly EighthIndex[] = BASIC_KICK_INDICES,
+): RhythmPattern {
+  const kickSet = new Set<EighthIndex>(kickIndices);
+  const snareSet = new Set<EighthIndex>([BEAT_TWO_INDEX, BEAT_FOUR_INDEX]);
+
+  return {
+    id: "act-3-drum-kit",
+    tempoBpm,
+    beatsPerBar: 4,
+    beatUnit: 4,
+    voices: [
+      {
+        instrument: "hihat-closed",
+        clef: "percussion",
+        slots: drumVoiceSlots("hihat-closed", () => true),
+      },
+      {
+        instrument: "snare",
+        clef: "percussion",
+        slots: drumVoiceSlots("snare", (index) => snareSet.has(index)),
+      },
+      {
+        instrument: "kick",
+        clef: "percussion",
+        slots: drumVoiceSlots("kick", (index) => kickSet.has(index)),
+      },
+    ],
+  };
+}
+
+// Re-derives a drum-kit pattern's kick voice at a new set of indices, leaving
+// the hi-hat and snare voices untouched — mirrors withAccentsAt's
+// reset-non-target-slots behaviour so repeated calls swap cleanly instead of
+// accumulating hits.
+export function withKickIndices(
+  pattern: RhythmPattern,
+  kickIndices: readonly EighthIndex[],
+): RhythmPattern {
+  const kickSet = new Set<EighthIndex>(kickIndices);
+  const voices = pattern.voices.map((voice) =>
+    voice.instrument === "kick"
+      ? {
+          ...voice,
+          slots: drumVoiceSlots("kick", (index) => kickSet.has(index)),
+        }
+      : voice,
+  );
+
+  return { ...pattern, id: `${pattern.id}-kick`, voices };
 }
 
 export function activeInstruments(pattern: RhythmPattern): Instrument[] {

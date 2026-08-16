@@ -56,8 +56,14 @@ export function createScheduler(
       }
 
       const pattern = callbacks.getRhythmState().currentPattern;
-      const slot = pattern.voices[0]?.slots[currentSlot];
-      if (slot) callbacks.onNoteScheduled(currentSlot, nextNoteTime, slot);
+      // Every voice in the pattern gets its own onNoteScheduled call for this
+      // slot — a single-voice pattern (Act I/II) fires once, a drum-kit
+      // pattern (Act III onward) fires once per instrument, each carrying its
+      // own NoteEvent so the caller can route it to the right instrument.
+      for (const voice of pattern.voices) {
+        const slot = voice.slots[currentSlot];
+        if (slot) callbacks.onNoteScheduled(currentSlot, nextNoteTime, slot);
+      }
 
       nextNoteTime += secondsPerEighthNote(pattern.tempoBpm);
       currentSlot = nextSlotIndex(currentSlot);

@@ -1,32 +1,44 @@
 import { audioTimeToPerformanceTime } from "./src/audio-clock-sync";
 import { createScheduler, type Scheduler } from "./src/audio-scheduler";
-import { createPracticePadVoice } from "./src/audio-voices";
+import { createDrumKitVoices } from "./src/audio-voices";
 import { annotationForStep, type AnnotationContent } from "./src/annotations";
 import {
   ACT1_TARGETS,
   advanceBar,
   canFlipAccents,
+  canTriggerCompare332,
+  canTriggerCompareBasic,
+  canTriggerOrchestrate,
   isFlipControlVisible,
   pendingAccentTargetsForStep,
+  pendingKickIndicesForStep,
   returnToTitle,
   selectTarget,
   selectableTargets,
   startExhibition,
+  triggerCompare332,
+  triggerCompareBasic,
   triggerFlip,
+  triggerOrchestrate,
   type ActId,
   type ExhibitionState,
 } from "./src/exhibition-state";
 import { prefersReducedMotion, watchReducedMotion } from "./src/motion";
 import { renderPulseScore, type NoteBox } from "./src/notation";
 import {
+  BASIC_KICK_INDICES,
+  BEAT_FOUR_INDEX,
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
   BEAT_TWO_INDEX,
   EIGHTH_LABELS,
+  OFFBEAT_AFTER_BEAT_TWO_INDEX,
   applyPendingPattern,
+  createDrumKitPattern,
   createInitialRhythmState,
   queuePendingPattern,
   withAccentsAt,
+  withKickIndices,
   type EighthIndex,
   type RhythmState,
 } from "./src/rhythm-model";
@@ -78,6 +90,15 @@ const flipAccentsButtonEl = document.querySelector<HTMLButtonElement>(
 const actLabelElQuery = document.querySelector<HTMLParagraphElement>(
   '[data-testid="act-label"]',
 );
+const orchestrateButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="orchestrate-kit"]',
+);
+const compareBasicButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="compare-basic"]',
+);
+const compare332ButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="compare-332"]',
+);
 
 if (
   titleRoot &&
@@ -93,7 +114,10 @@ if (
   playbackCursor &&
   backNavButton &&
   flipAccentsButtonEl &&
-  actLabelElQuery
+  actLabelElQuery &&
+  orchestrateButtonEl &&
+  compareBasicButtonEl &&
+  compare332ButtonEl
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
@@ -102,11 +126,14 @@ if (
   const cursorEl = playbackCursor;
   const flipAccentsButton = flipAccentsButtonEl;
   const actLabelEl = actLabelElQuery;
+  const orchestrateButton = orchestrateButtonEl;
+  const compareBasicButton = compareBasicButtonEl;
+  const compare332Button = compare332ButtonEl;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
   let currentAudioContext: AudioContext | null = null;
-  let activeVoice: ReturnType<typeof createPracticePadVoice> | null = null;
+  let activeVoice: ReturnType<typeof createDrumKitVoices> | null = null;
   let muted = false;
   let currentAnnotationId: AnnotationContent["id"] | null = null;
   let latestNoteBoxes: readonly NoteBox[] = [];
@@ -117,27 +144,43 @@ if (
   // once the fade-out has actually finished, not on a guessed delay.
   const ANNOTATION_FADE_MS = 700;
 
+  function beatTargetLabel(index: EighthIndex): string {
+    switch (index) {
+      case BEAT_ONE_INDEX:
+        return "Accent beat 1";
+      case BEAT_THREE_INDEX:
+        return "Accent beat 3";
+      case OFFBEAT_AFTER_BEAT_TWO_INDEX:
+        return "Move the kick to the offbeat after beat 2";
+      case BEAT_FOUR_INDEX:
+        return "Add the kick on beat 4";
+      default:
+        return `Beat target ${index}`;
+    }
+  }
+
   function createBeatTarget(index: EighthIndex): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "beat-target";
     button.dataset.testid = `beat-target-${index}`;
-    button.setAttribute(
-      "aria-label",
-      `Accent beat ${index === BEAT_ONE_INDEX ? "1" : "3"}`,
-    );
+    button.setAttribute("aria-label", beatTargetLabel(index));
     button.setAttribute("aria-pressed", "false");
     button.disabled = true;
     button.addEventListener("click", () => {
       if (button.disabled) return;
       exhibitionState = selectTarget(exhibitionState, index);
-      if (
-        exhibitionState.screen === "exhibition" &&
-        exhibitionState.step === "queued" &&
-        !rhythmState.pendingPattern
-      ) {
-        const accented = withAccentsAt(rhythmState.currentPattern, ACT1_TARGETS);
-        rhythmState = queuePendingPattern(rhythmState, accented);
+      if (exhibitionState.screen === "exhibition" && !rhythmState.pendingPattern) {
+        if (exhibitionState.act === "act-1" && exhibitionState.step === "queued") {
+          const accented = withAccentsAt(rhythmState.currentPattern, ACT1_TARGETS);
+          rhythmState = queuePendingPattern(rhythmState, accented);
+        } else if (exhibitionState.act === "act-3") {
+          const kickIndices = pendingKickIndicesForStep(exhibitionState.step);
+          if (kickIndices) {
+            const withKicks = withKickIndices(rhythmState.currentPattern, kickIndices);
+            rhythmState = queuePendingPattern(rhythmState, withKicks);
+          }
+        }
       }
       render();
     });
@@ -147,6 +190,8 @@ if (
   const beatTargets = new Map<EighthIndex, HTMLButtonElement>([
     [BEAT_ONE_INDEX, createBeatTarget(BEAT_ONE_INDEX)],
     [BEAT_THREE_INDEX, createBeatTarget(BEAT_THREE_INDEX)],
+    [OFFBEAT_AFTER_BEAT_TWO_INDEX, createBeatTarget(OFFBEAT_AFTER_BEAT_TWO_INDEX)],
+    [BEAT_FOUR_INDEX, createBeatTarget(BEAT_FOUR_INDEX)],
   ]);
   for (const button of beatTargets.values()) hitTargetsContainer.append(button);
 
@@ -174,6 +219,25 @@ if (
   underlinePath.setAttribute("class", "annotation-underline-path");
   underlineSvg.append(underlinePath);
   staffFrame.append(underlineSvg);
+
+  // Act III's informal grouping braces (annotation-1's whole-voice bracket,
+  // annotation-5's labelled 3-3-2 braces) — a full-frame overlay like
+  // arrowsSvg, since a brace can span several noteboxes at once rather than
+  // pointing at a single one.
+  const groupBracesSvg = document.createElementNS(SVG_NS, "svg");
+  groupBracesSvg.setAttribute("class", "annotation-group-braces");
+  groupBracesSvg.style.display = "none";
+  staffFrame.append(groupBracesSvg);
+
+  // Annotation-3's hand-written arc from the kick's old beat-3 placement to
+  // the offbeat after beat 2 — a single curved stroke below the staff.
+  const arcSvg = document.createElementNS(SVG_NS, "svg");
+  arcSvg.setAttribute("class", "annotation-arc");
+  arcSvg.style.display = "none";
+  const arcPath = document.createElementNS(SVG_NS, "path");
+  arcPath.setAttribute("class", "annotation-arc-path");
+  arcSvg.append(arcPath);
+  staffFrame.append(arcSvg);
 
   // Used when a mark's geometry is set for the first time at a new
   // annotation's content-swap moment — animates the hand-drawn stroke in.
@@ -328,6 +392,88 @@ if (
     }
   }
 
+  // Draws one unlabeled or labelled bracket per `groupBraces` entry, spanning
+  // the noteboxes from startIndex to endIndex — a single continuous
+  // "⊓"-shaped stroke (down-across-down) so animateDrawOn's dasharray
+  // technique still works on each brace as one path.
+  const BRACE_TICK_HEIGHT = 10;
+  const BRACE_MARGIN_ABOVE = 14;
+
+  function positionGroupBraces(
+    annotation: AnnotationContent,
+    noteBoxes: readonly NoteBox[],
+    drawOn: boolean,
+  ): void {
+    groupBracesSvg.replaceChildren();
+    const braces = annotation.groupBraces ?? [];
+    if (braces.length === 0) {
+      groupBracesSvg.style.display = "none";
+      return;
+    }
+    const w = staffFrame.clientWidth;
+    const h = staffFrame.clientHeight;
+    groupBracesSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    groupBracesSvg.style.display = "block";
+
+    for (const brace of braces) {
+      const startBox = noteBoxes[brace.startIndex];
+      const endBox = noteBoxes[brace.endIndex];
+      if (!startBox || !endBox) continue;
+      const startX = startBox.x;
+      const endX = endBox.x + endBox.w;
+      const y = Math.min(startBox.y, endBox.y) - BRACE_MARGIN_ABOVE;
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("class", "annotation-brace-path");
+      path.setAttribute(
+        "d",
+        `M${startX},${y + BRACE_TICK_HEIGHT} L${startX},${y} L${endX},${y} L${endX},${y + BRACE_TICK_HEIGHT}`,
+      );
+      groupBracesSvg.append(path);
+      if (drawOn) animateDrawOn(path);
+      else setPathFullyDrawn(path);
+
+      if (brace.label) {
+        const text = document.createElementNS(SVG_NS, "text");
+        text.setAttribute("class", "annotation-brace-label");
+        text.setAttribute("x", `${(startX + endX) / 2}`);
+        text.setAttribute("y", `${y - 4}`);
+        text.setAttribute("text-anchor", "middle");
+        text.textContent = brace.label;
+        groupBracesSvg.append(text);
+      }
+    }
+  }
+
+  // Annotation-3's arc from the kick's old placement to its new offbeat,
+  // drawn below the staff as a single downward-bulging curve.
+  function positionArc(
+    annotation: AnnotationContent,
+    noteBoxes: readonly NoteBox[],
+    drawOn: boolean,
+  ): void {
+    const fromBox =
+      annotation.arcFrom !== undefined ? noteBoxes[annotation.arcFrom] : undefined;
+    const toBox = annotation.arcTo !== undefined ? noteBoxes[annotation.arcTo] : undefined;
+    if (!fromBox || !toBox) {
+      arcSvg.style.display = "none";
+      return;
+    }
+    const w = staffFrame.clientWidth;
+    const h = staffFrame.clientHeight;
+    arcSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    arcSvg.style.display = "block";
+
+    const startX = fromBox.x + fromBox.w / 2;
+    const startY = fromBox.y + fromBox.h;
+    const endX = toBox.x + toBox.w / 2;
+    const endY = toBox.y + toBox.h;
+    const controlX = (startX + endX) / 2;
+    const controlY = Math.max(startY, endY) + 24;
+    arcPath.setAttribute("d", `M${startX},${startY} Q${controlX},${controlY} ${endX},${endY}`);
+    if (drawOn) animateDrawOn(arcPath);
+    else setPathFullyDrawn(arcPath);
+  }
+
   function clearAnnotationFadeTimeout(): void {
     if (annotationFadeTimeoutId !== null) {
       clearTimeout(annotationFadeTimeoutId);
@@ -345,6 +491,8 @@ if (
     delete annotationNote.dataset.annotationId;
     underlineSvg.style.display = "none";
     arrowsSvg.style.display = "none";
+    groupBracesSvg.style.display = "none";
+    arcSvg.style.display = "none";
     currentAnnotationId = null;
   }
 
@@ -354,6 +502,8 @@ if (
     if (!annotation) {
       underlineSvg.style.display = "none";
       arrowsSvg.style.display = "none";
+      groupBracesSvg.style.display = "none";
+      arcSvg.style.display = "none";
       return;
     }
     // Uses the latest known note layout rather than whatever was passed in
@@ -362,6 +512,8 @@ if (
     requestAnimationFrame(() => {
       positionUnderline(annotation, true);
       positionArrows(annotation, latestNoteBoxes, true);
+      positionGroupBraces(annotation, latestNoteBoxes, true);
+      positionArc(annotation, latestNoteBoxes, true);
     });
   }
 
@@ -377,6 +529,8 @@ if (
         requestAnimationFrame(() => {
           positionUnderline(annotation, false);
           positionArrows(annotation, noteBoxes, false);
+          positionGroupBraces(annotation, noteBoxes, false);
+          positionArc(annotation, noteBoxes, false);
         });
       }
       return;
@@ -456,6 +610,8 @@ if (
         return "Act I · Pulse";
       case "act-2":
         return "Act II · Weight";
+      case "act-3":
+        return "Act III · Kit";
     }
   }
 
@@ -472,6 +628,16 @@ if (
     flipAccentsButton.setAttribute("aria-pressed", String(backbeatAccented));
   }
 
+  // Each of Act III's three reveal controls is live only at the exhibition
+  // step its own annotation names it in (EXHIBITION_FLOW.md section 8's
+  // "orchestrate the pulse ↘" / "Basic kit ↓" / "3-3-2 kick ↓") — same
+  // understated, appear-only-when-invited convention as the flip control.
+  function syncAct3Controls(): void {
+    orchestrateButton.hidden = !canTriggerOrchestrate(exhibitionState);
+    compareBasicButton.hidden = !canTriggerCompareBasic(exhibitionState);
+    compare332Button.hidden = !canTriggerCompare332(exhibitionState);
+  }
+
   function render(): void {
     const { noteBoxes } = renderPulseScore(staffEl, rhythmState.currentPattern);
     latestNoteBoxes = noteBoxes;
@@ -484,6 +650,7 @@ if (
     syncBeatLabels(noteBoxes);
     syncAnnotation(noteBoxes);
     syncFlipControl();
+    syncAct3Controls();
   }
 
   const titleHandles = initTitleScreen({
@@ -495,14 +662,14 @@ if (
       // a fresh Act I every time, regardless of what ended the last visit.
       rhythmState = createInitialRhythmState();
       exhibitionState = startExhibition();
-      const voice = createPracticePadVoice(audioContext);
+      const voice = createDrumKitVoices(audioContext);
       activeVoice = voice;
       render();
 
       scheduler = createScheduler(audioContext, {
         getRhythmState: () => rhythmState,
         onNoteScheduled(slotIndex, time, note) {
-          if (note.active) voice.trigger(time, note.velocity, note.accent);
+          if (note.active) voice.trigger(note.instrument, time, note.velocity, note.accent);
           // The visual cursor is driven by this timeout, but the sound above
           // was already scheduled against `time` on the audio clock — the
           // timeout only decides when the *cursor* moves, never the audio.
@@ -677,6 +844,63 @@ if (
       if (targets) {
         const accented = withAccentsAt(rhythmState.currentPattern, targets);
         rhythmState = queuePendingPattern(rhythmState, accented);
+      }
+    }
+    render();
+  });
+
+  // "Orchestrate the pulse ↘" (EXHIBITION_FLOW.md section 8) — a one-shot
+  // reveal that introduces the full drum kit at the next barline. Unlike the
+  // other Act III controls this is a full pattern swap (hi-hat/snare voices
+  // appear for the first time), not a kick-only re-derivation, so it's the
+  // one case pendingKickIndicesForStep deliberately excludes.
+  orchestrateButton.addEventListener("click", () => {
+    if (orchestrateButton.hidden || !canTriggerOrchestrate(exhibitionState)) return;
+    exhibitionState = triggerOrchestrate(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-3" &&
+      exhibitionState.step === "kit-queued" &&
+      !rhythmState.pendingPattern
+    ) {
+      const kit = createDrumKitPattern(rhythmState.currentPattern.tempoBpm, BASIC_KICK_INDICES);
+      rhythmState = queuePendingPattern(rhythmState, kit);
+    }
+    render();
+  });
+
+  // The closing comparison's two named reveals (EXHIBITION_FLOW.md section
+  // 8: "Temporarily reveal: basic kit, 3-3-2 kick") — both re-derive only the
+  // kick voice on the already-present drum-kit pattern.
+  compareBasicButton.addEventListener("click", () => {
+    if (compareBasicButton.hidden || !canTriggerCompareBasic(exhibitionState)) return;
+    exhibitionState = triggerCompareBasic(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-3" &&
+      !rhythmState.pendingPattern
+    ) {
+      const kickIndices = pendingKickIndicesForStep(exhibitionState.step);
+      if (kickIndices) {
+        const withKicks = withKickIndices(rhythmState.currentPattern, kickIndices);
+        rhythmState = queuePendingPattern(rhythmState, withKicks);
+      }
+    }
+    render();
+  });
+
+  compare332Button.addEventListener("click", () => {
+    if (compare332Button.hidden || !canTriggerCompare332(exhibitionState)) return;
+    exhibitionState = triggerCompare332(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-3" &&
+      !rhythmState.pendingPattern
+    ) {
+      const kickIndices = pendingKickIndicesForStep(exhibitionState.step);
+      if (kickIndices) {
+        const withKicks = withKickIndices(rhythmState.currentPattern, kickIndices);
+        rhythmState = queuePendingPattern(rhythmState, withKicks);
       }
     }
     render();

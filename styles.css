@@ -297,6 +297,8 @@ nav {
 .hit-targets,
 .annotation-layer,
 .annotation-arrows,
+.annotation-group-braces,
+.annotation-arc,
 .beat-labels {
   position: absolute;
   inset: 0;
@@ -305,6 +307,8 @@ nav {
 .hit-targets,
 .annotation-layer,
 .annotation-arrows,
+.annotation-group-braces,
+.annotation-arc,
 .beat-labels {
   pointer-events: none;
 }
@@ -426,6 +430,38 @@ nav {
   transform: rotate(-1.1deg);
 }
 
+.annotation-note[data-annotation-id="act3-annotation-1"] {
+  transform: rotate(-0.9deg);
+}
+
+.annotation-note[data-annotation-id="act3-annotation-2b"] {
+  transform: rotate(1deg);
+}
+
+.annotation-note[data-annotation-id="act3-annotation-3"] {
+  transform: rotate(-0.7deg);
+}
+
+.annotation-note[data-annotation-id="act3-annotation-4"] {
+  transform: rotate(1.1deg);
+}
+
+.annotation-note[data-annotation-id="act3-annotation-6"] {
+  transform: rotate(0.8deg);
+}
+
+.annotation-note[data-annotation-id="act3-annotation-7"] {
+  transform: rotate(-1deg);
+}
+
+.annotation-note[data-annotation-id="act3-compare-1"] {
+  transform: rotate(1.1deg);
+}
+
+.annotation-note[data-annotation-id="act3-compare-2"] {
+  transform: rotate(-1.1deg);
+}
+
 /* annotation-2's three words carry their own per-line rotation instead
    (offsetLines), so the container itself stays untransformed. */
 
@@ -495,6 +531,36 @@ nav {
 }
 
 .annotation-arrow-path {
+  fill: none;
+  stroke: var(--pencil-blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms ease;
+}
+
+.annotation-group-braces {
+  display: none;
+}
+
+.annotation-brace-path {
+  fill: none;
+  stroke: var(--graphite);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 550ms ease;
+}
+
+.annotation-brace-label {
+  font-family: Caveat, cursive;
+  font-size: 0.95rem;
+  fill: var(--graphite);
+}
+
+.annotation-arc {
+  display: none;
+}
+
+.annotation-arc-path {
   fill: none;
   stroke: var(--pencil-blue);
   stroke-width: 2;
@@ -604,6 +670,46 @@ nav {
   cursor: default;
 }
 
+/* Same understated temporary-control convention as .flip-accents — live only
+   at the specific Act III step each button corresponds to. */
+.orchestrate-kit,
+.compare-basic,
+.compare-332 {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border: none;
+  background: transparent;
+  color: var(--pencil-blue);
+  font-family: Caveat, cursive;
+  font-size: clamp(1.1rem, 2.6vw, 1.4rem);
+  cursor: pointer;
+  transform: rotate(-1.2deg);
+  transition: opacity 200ms ease, color 200ms ease;
+}
+
+.orchestrate-kit[hidden],
+.compare-basic[hidden],
+.compare-332[hidden] {
+  display: none;
+}
+
+.orchestrate-kit:hover,
+.orchestrate-kit:focus-visible,
+.compare-basic:hover,
+.compare-basic:focus-visible,
+.compare-332:hover,
+.compare-332:focus-visible {
+  color: var(--ink);
+}
+
+.orchestrate-kit:focus-visible,
+.compare-basic:focus-visible,
+.compare-332:focus-visible {
+  outline: 2px dashed var(--ink);
+  outline-offset: 2px;
+}
+
 @media (width <= 780px) {
   .staff-frame {
     height: clamp(110px, 20vh, 170px);
@@ -648,6 +754,8 @@ nav {
 
   .annotation-underline-path,
   .annotation-arrow-path,
+  .annotation-brace-path,
+  .annotation-arc-path,
   .beat-target::before {
     transition: none;
   }
@@ -665,6 +773,8 @@ html.reduced-motion .playback-cursor {
 
 html.reduced-motion .annotation-underline-path,
 html.reduced-motion .annotation-arrow-path,
+html.reduced-motion .annotation-brace-path,
+html.reduced-motion .annotation-arc-path,
 html.reduced-motion .beat-target::before {
   transition: none;
 }
