@@ -881,8 +881,21 @@ nav {
   padding: 0;
   border: none;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   cursor: pointer;
+}
+
+/* .laboratory-flow (inactive) sets pointer-events: none on itself, but that
+   alone doesn't stop a descendant from opting back in with its own explicit
+   pointer-events: auto -- CSS checks each element's own computed value, it
+   doesn't block a child from re-enabling hit-testing. Once the visitor has
+   opened the laboratory at least once, its (now off-screen/opacity: 0)
+   note-target buttons stayed clickable and sat on top of later scenes'
+   same-position hit-targets, silently swallowing clicks aimed at Act
+   III-V's beat-targets. Scope the override to only when the laboratory is
+   the active scene. */
+.laboratory-flow-active .lab-note-target {
+  pointer-events: auto;
 }
 
 .lab-note-target::before {
