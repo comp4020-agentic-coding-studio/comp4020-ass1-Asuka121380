@@ -66,6 +66,67 @@ timed against `AudioContext.currentTime`, not `setTimeout`.
    actually fixed, not just recompiled:
    [`c1ecba4...2a0097c`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/compare/c1ecba4df4e5d9f85b98e26165226e492b8358d6...2a0097c718a64137e12e4499697dd510083bb476).
 
+4. **A second real-browser pass at both marking viewports, on 2026-08-16,
+   found seven things a green `pnpm check` still couldn't see.** Static
+   checks can't judge typography, timing feel, perceptual contrast, or
+   whether a navigation affordance exists at all, so after the visual-polish
+   pass shipped at
+   [`7cafec3`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/7cafec35c4fc4f0b2c0cada483c768be26b42c12)
+   I loaded the deployed shape in a real browser again rather than trusting
+   the passing suite. Observed → why it weakened the exhibition → what I did:
+   - The title still read as a typeset book (body's serif stack on the
+     heading) despite the brief's hand-drawn framing, so it didn't establish
+     the sketchbook feel before anything else on the page. Applied the
+     already-vendored Caveat font to the heading and title copy.
+   - "Tap to begin" was a heavy oval button with a separate "or press Enter"
+     line, and that Enter claim was actually false --- `title-screen.ts` never
+     attached a `keydown` listener, so the stated affordance didn't exist.
+     Replaced both with one transparent full-screen hit-area and a single
+     small "click anywhere to begin" prompt, and wired a real Enter/Space
+     listener guarded on the same `activated` flag as the click handler.
+   - The visual playhead visibly trailed the audible hit. The scheduler was
+     computing the cursor's move-delay as a bare `(time - currentTime) * 1000`,
+     which silently ignores output latency, and `.playback-cursor`'s 120ms
+     CSS transition added further visible lag on top of that. I wrote a new
+     `audio-clock-sync.ts` that maps a target `AudioContext` time to
+     wall-clock time via `getOutputTimestamp()` (falling back to
+     `outputLatency`/`baseLatency`), covered it with fake-clock unit tests for
+     all three branches, and shortened the CSS transition so the marker's
+     arrival tracks the corrected delay instead of gliding in late.
+   - Accented beats weren't perceptually distinct from unaccented ones ---
+     `BASE_VELOCITY`/`ACCENT_VELOCITY` were only a ~1.6x gain ratio. I widened
+     it to a ~2.5x ratio and gave accented hits a firmer attack and brighter
+     filter cutoff in `audio-voices.ts`, and added a `DynamicsCompressorNode`
+     limiter so the louder accent can't clip the master output.
+   - The annotation sequence advanced after one bar with a same-tick content
+     swap, so nothing actually read as "fade out, then fade in" --- it was
+     "vanish, then appear." I raised each annotation's hold to a full two
+     bars and rewrote `syncAnnotation` in `main.ts` as an explicit two-phase
+     crossfade (fade out on a cancellable timeout, then swap and fade in),
+     gated on bar boundaries so it stays timer-independent of wall-clock
+     guesses.
+   - There was no way to leave Act I and return to the title screen, and nor
+     could there ever be a forward "Next" --- a visitor who started the
+     exhibition had no way back. Added a reusable `returnToTitle()` state
+     transition and a `.back-nav` control (hand-drawn curved arrow,
+     `>=44x44` touch target, keyboard-accessible) that tears down the
+     departing act's `AudioContext`/scheduler and re-arms the title screen's
+     first-activation path cleanly, so a visitor can leave and restart
+     without a stale listener or a second gesture required.
+
+   I verified all seven live with a headless-Chromium pass at 1920x1080 and
+   390x844 (screenshots and a described audio-timing/accent-contrast console
+   probe standing in for the parts I can't literally listen to or see
+   myself): click/tap-anywhere starts the exhibition while a click exactly on
+   the mute-toggle does not, Enter and Space both work, the cursor advances
+   at a regular cadence consistent with the corrected latency mapping, each
+   annotation holds for two full bars with a visible fade, back-nav returns
+   to a clean and restartable title screen via both mouse and keyboard, and
+   a mid-interaction resize preserves exhibition state. That review-fix work
+   landed in
+   [`89a6c0a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/89a6c0ad57ddfe4b9a1481d8af54ca4a89152f6c):
+   [`7cafec3...89a6c0a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/compare/7cafec35c4fc4f0b2c0cada483c768be26b42c12...89a6c0ad57ddfe4b9a1481d8af54ca4a89152f6c).
+
 ## Before you ship
 
 `pnpm check:evidence` verifies the citations above resolve to real commits,
