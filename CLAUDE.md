@@ -198,3 +198,65 @@ says about the developer you're becoming.
   media into the repo, reference the committed filename rather than an
   absolute local path, and verify the exact extension casing in a production
   build.
+
+## Where the Beat Leans --- project rules
+
+This project is an interactive music explainer. This pass implements only the
+title screen and Act I ("Pulse"); the full design lives in
+`../EXHIBITION_FLOW.md` (outside the repo --- it's a Claude-facing production
+brief, not a submission artefact). Acts II--V, the laboratory, and the
+acknowledgement page are out of scope for this pass and must not be built or
+exposed via navigation.
+
+- **VexFlow SVG is the only source of visitor-facing notation.** No raster
+  notation images, no letter-grid substitutes (`K`/`S`/`B`). The
+  `1 & 2 & 3 & 4 &` beat labels are explanatory text under the staff, never a
+  replacement for engraved notation.
+- **Act I renders on a conventional five-line staff with a percussion clef**
+  (`stave.addClef("percussion")`), one abstract voice on it --- not a
+  collapsed one-line staff. The real drum kit (hi-hat/snare/bass-drum) is
+  Act III's job, not this pass's.
+- **Rhythm state is the single source of truth.** `src/rhythm-model.ts`'s
+  `RhythmPattern` drives the score renderer, the audio scheduler, and the
+  playback cursor. Never hard-code a second copy of the rhythm in CSS, SVG,
+  or audio code.
+- **`AudioContext.currentTime` is the clock.** `setTimeout`/
+  `requestAnimationFrame` may wake the scheduler or drive the visual cursor,
+  but never gate *when a sound plays* --- that's always computed against the
+  audio clock in `src/audio-scheduler.ts`.
+- **Pattern changes apply only at bar boundaries.** Queue changes into
+  `RhythmState.pendingPattern`; only the scheduler's bar-boundary callback
+  swaps `pendingPattern` into `currentPattern`.
+- **Audio starts only after an explicit visitor gesture.** No `AudioContext`
+  is constructed anywhere except inside `src/title-screen.ts`'s activation
+  handler.
+- **Every required mouse action has a keyboard and touch equivalent, and none
+  may depend on hover or drag.** Use real `<button>` elements for every
+  interactive target, even the transparent hit-areas over noteheads.
+- **Test at exactly 1920x1080 and 390x844.** Resizing mid-interaction must not
+  lose exhibition step, selected beats, or audio/playback state.
+- **Respect `prefers-reduced-motion`.** Disable stroke-draw and spatial
+  movement; keep short opacity fades; the interaction must stay understandable.
+- **Local static assets only, with verified licences.** No runtime
+  third-party font/audio/API requests. Phase one's percussive voice is fully
+  synthesized via Web Audio (filtered noise burst + fast-decay envelope), a
+  deliberate deviation from bundling a sample file --- see the note below.
+- **Never accept a visually plausible score without checking it.** A score
+  that renders without throwing is not the same as one that's musically
+  correct; check clef, notehead line, beaming, and accent placement in a real
+  browser before calling notation work done.
+- **Never commit a red `pnpm check` state.**
+
+### Deviation: synthesized percussion voice, not a bundled sample
+
+`EXHIBITION_FLOW.md` section 3.4 asks for a bundled CC0 drum sample even in
+phase one. This build synthesizes the "dry, neutral practice-pad" hit instead
+(short generated noise buffer -> bandpass/highpass filter -> fast-decay
+`GainNode` envelope -> per-voice/master gain, the same routing the brief
+prescribes for a sample). Reasoning: the target sound is a textbook synthesis
+case; sourcing and correctly licensing a real sample under a same-day deadline
+is a real risk (dead link, unverifiable licence, wrong attribution) that
+synthesis sidesteps entirely; and it trivially satisfies "no third-party
+network request at runtime." Swapping in real hi-hat/snare/kick samples for
+Act III later is a drop-in change to the buffer-generation function only, not
+an architecture change.
