@@ -500,7 +500,11 @@ if (
     });
   }
 
-  playPauseButton.addEventListener("click", () => {
+  // Shared by the visible control's click handler and the global Space-bar
+  // shortcut below, so both paths freeze/resume audio, the visual playhead,
+  // and the accessible name/state identically — there is only ever one
+  // "toggle" implementation to keep coherent.
+  const togglePlayPause = (): void => {
     if (!scheduler) return;
     if (scheduler.isRunning) {
       scheduler.pause();
@@ -513,6 +517,33 @@ if (
         playPauseButton.setAttribute("aria-pressed", "true");
       });
     }
+  };
+
+  playPauseButton.addEventListener("click", togglePlayPause);
+
+  // Any element with its own native Space/Enter semantics (a button, link,
+  // form control, or contenteditable region) must keep handling Space
+  // itself — otherwise a Space press on the focused play-pause button would
+  // both fire its native click *and* this global handler, toggling playback
+  // twice. Everything else (document body, the inert stage background)
+  // falls through to the global shortcut.
+  function focusOwnsSpaceKey(): boolean {
+    const el = document.activeElement;
+    if (!el || el === document.body) return false;
+    if (el instanceof HTMLElement && el.isContentEditable) return true;
+    return ["BUTTON", "A", "INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+  }
+
+  // Enter/Space on the title screen is title-screen.ts's job (starting the
+  // exhibition); once inside an act, Space toggles pause/resume everywhere
+  // via the same togglePlayPause() the visible control uses, so audio, the
+  // playhead, and pending pattern state always stay in lockstep with it.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== " " && event.key !== "Spacebar") return;
+    if (exhibitionState.screen !== "exhibition") return;
+    if (focusOwnsSpaceKey()) return;
+    event.preventDefault();
+    togglePlayPause();
   });
 
   // Resets the teaching sequence only — rhythm/exhibition state and the

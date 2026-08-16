@@ -201,12 +201,13 @@ says about the developer you're becoming.
 
 ## Where the Beat Leans --- project rules
 
-This project is an interactive music explainer. This pass implements only the
-title screen and Act I ("Pulse"); the full design lives in
+This project is an interactive music explainer. The full design lives in
 `../EXHIBITION_FLOW.md` (outside the repo --- it's a Claude-facing production
-brief, not a submission artefact). Acts II--V, the laboratory, and the
-acknowledgement page are out of scope for this pass and must not be built or
-exposed via navigation.
+brief, not a submission artefact); `../REMAINING_EXHIBITION_IMPLEMENTATION.md`
+is the execution plan for Acts II--V, the laboratory, and the acknowledgement
+page. The Title + Act I baseline below was reviewed live in a real browser and
+approved as the visual/interaction baseline for the whole exhibition --- later
+acts extend this design system, they never redesign it.
 
 - **VexFlow SVG is the only source of visitor-facing notation.** No raster
   notation images, no letter-grid substitutes (`K`/`S`/`B`). The
@@ -214,8 +215,65 @@ exposed via navigation.
   replacement for engraved notation.
 - **Act I renders on a conventional five-line staff with a percussion clef**
   (`stave.addClef("percussion")`), one abstract voice on it --- not a
-  collapsed one-line staff. The real drum kit (hi-hat/snare/bass-drum) is
-  Act III's job, not this pass's.
+  collapsed one-line staff. Acts III--V add a real drum-set staff (and, from
+  Act IV, a separate bass-clef staff below it) rather than replacing this one.
+
+### Design system (locked --- extend, don't redesign)
+
+Every act, the laboratory, and the acknowledgement page must read as the same
+manuscript notebook, not separate interfaces. Concretely, that means reusing
+rather than re-implementing:
+
+- **Palette**: only the `:root` custom properties in `styles.css`
+  (`--paper`/`--paper-light`/`--ink`/`--graphite`/`--pencil-blue`, plus
+  `--heart-red` reserved solely for the acknowledgement page's heart glyph).
+  No scene ever introduces a one-off hex colour.
+- **Typography**: Caveat (handwritten) for all heading/annotation/label copy;
+  the Georgia serif stack stays reserved for structural body text only, never
+  for anything meant to feel hand-annotated.
+- **Full-viewport scene composition**: each act/lab/acknowledgement is one
+  `100dvh`/`100svh` section (`.title-screen`/`.score-stage`-style absolute
+  overlay, `opacity`/`pointer-events` toggled on activation), padded with
+  `env(safe-area-inset-*)` --- never a scrolling multi-viewport page except
+  the one deliberate laboratory-to-acknowledgement scroll.
+- **Hand-drawn marks, not vector-perfect UI**: slightly irregular `border-
+  radius`, small fixed per-element `rotate()`, and SVG paths with a stroke-
+  dasharray "draw-on" animation (`animateDrawOn`/`setPathFullyDrawn` in
+  `main.ts`) for every arrow/underline. Reuse these helpers; don't hand-roll a
+  second animation technique.
+- **Navigation**: upper-left hand-drawn back arrow (`.back-nav`, curved SVG
+  path + Caveat label naming the actual destination), upper-right sound
+  control (`.mute-toggle`) --- fixed `<header>` position, never per-scene
+  markup. There is never a forward "Next" button; progression is always
+  guided-interaction-at-a-bar-boundary followed by the fade transition below.
+- **Annotation crossfade**: one annotation visible at a time, driven by
+  `syncAnnotation`'s two-phase fade-out-then-swap-in (`ANNOTATION_FADE_MS`),
+  gated on exhibition-state changes rather than wall-clock timers. Later acts
+  add new `AnnotationContent` cases; they don't rewrite the crossfade.
+  Scene-to-scene transitions reuse the same `title-screen-fading`/`*-active`
+  opacity-toggle pattern, not a new transition mechanism per act.
+  Note: the id union in `annotations.ts`/CSS selectors is act-agnostic (`"annotation-1"`
+  etc. reused as generic step labels); scenes read the current step from
+  `exhibition-state.ts`, which is the single source of truth for act/step.
+- **Controls stay understated**: no rectangular buttons where a hand-drawn
+  circle/underline reads better; every control still keeps a real `<button>`,
+  a `>=44x44` touch target, and a visible `:focus-visible` outline.
+- **Global Space-bar shortcut**: `Enter`/`Space` on the title screen starts
+  the exhibition (`title-screen.ts`); inside any act/lab, `Space` toggles
+  play/pause via the exact same `togglePlayPause()` the visible play/pause
+  button's `click` handler calls (`main.ts`). The global `keydown` listener
+  ignores Space whenever `document.activeElement` is a button, link, form
+  control, or `contenteditable` region (`focusOwnsSpaceKey()`), so a Space
+  press on the focused play-pause button (or any other control) never
+  double-triggers, and `preventDefault()` on the handled key stops page
+  scroll. Any later act/lab control that itself has a Space meaning (e.g. a
+  focused preset button) must remain a real focusable element so this guard
+  continues to defer to it correctly --- don't build a control that "looks
+  focusable" without actually being one.
+- **Responsive behaviour**: verified live at 1920x1080 and 390x844 for every
+  scene; the `@media (width <= 780px)` breakpoint pattern in `styles.css`
+  (stacked annotation positions, centred text) is the one responsive
+  mechanism to extend, not a second breakpoint scheme.
 - **Rhythm state is the single source of truth.** `src/rhythm-model.ts`'s
   `RhythmPattern` drives the score renderer, the audio scheduler, and the
   playback cursor. Never hard-code a second copy of the rhythm in CSS, SVG,

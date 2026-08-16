@@ -1,9 +1,15 @@
+/* Locked design-system palette (CLAUDE.md "Design system" section) — every
+   act, the laboratory, and the acknowledgement page draw colour only from
+   these tokens, never a one-off hex value in scene-specific CSS.
+   --heart-red is reserved for the acknowledgement page's heart glyph only —
+   the one place in the whole exhibition that isn't ink/graphite/paper. */
 :root {
   --paper: #f2e7cc;
   --paper-light: #f7efd9;
   --ink: #25231f;
   --graphite: #746f64;
   --pencil-blue: #526c7a;
+  --heart-red: #a33a32;
 }
 
 /* Locally vendored, OFL-1.1-licensed (see ASSET_CREDITS.md) — no runtime
