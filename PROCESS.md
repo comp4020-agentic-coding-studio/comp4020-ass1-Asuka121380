@@ -127,6 +127,155 @@ timed against `AudioContext.currentTime`, not `setTimeout`.
    [`89a6c0a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/89a6c0ad57ddfe4b9a1481d8af54ca4a89152f6c):
    [`7cafec3...89a6c0a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/compare/7cafec35c4fc4f0b2c0cada483c768be26b42c12...89a6c0ad57ddfe4b9a1481d8af54ca4a89152f6c).
 
+5. **The revised Title + Act I was reviewed live and locked as the
+   exhibition's design system, not just Act I's.** After
+   [`89a6c0a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/89a6c0ad57ddfe4b9a1481d8af54ca4a89152f6c)
+   and the earlier process write-up in
+   [`0c480d3`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/0c480d31938a0c0e2bec07637a647e427fd4eae1),
+   I reviewed the running page again in a real browser and approved its
+   typography, manuscript-paper aesthetic, layout, handwritten navigation,
+   annotation pacing, accent contrast, and overall visual direction as-is.
+   From that point on this became a locked baseline: Acts II-V, the
+   laboratory, and the acknowledgement page were required to extend this
+   design system, never redesign it. The one open Act I request left on the
+   table was making Space toggle pause/resume rather than only start
+   playback. I implemented that and wrote the locked-baseline rule itself
+   into `CLAUDE.md` in the same commit, so every later milestone had the
+   constraint in front of it before writing any new scene:
+   [`af83c41`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/af83c415e93c63503c6dbdaabf3981023e5bc35c).
+   `focusOwnsSpaceKey()` defers to whichever control already owns focus so a
+   Space press never double-toggles; verified live at both viewports that
+   Enter still starts the exhibition, Space pauses/resumes with nothing
+   focused, Space on the focused play/pause button fires exactly once, and
+   Space on focused back-nav returns to title via its own native semantics.
+   pnpm check: 74/74.
+
+6. **Act II asks what "weight" costs an existing rhythm, not what a new one
+   sounds like** — same eight eighth-notes as Act I, but the accent flips
+   from 1&3 to 2&4 and back, so a visitor hears the same pattern read two
+   different ways before Act III adds real instruments. It reuses Act I's
+   staff, crossfade, and control conventions untouched, driven by a new
+   discriminated `Act1Screen | Act2Screen` state so the two acts can't leak
+   into each other's steps. A real-browser pass caught two bugs static
+   checks couldn't: `selectableTargets()` guarded only on step *name*, so
+   Act II's own `annotation-3` (reusing Act I's step label) would have
+   wrongly re-armed Act I's tap-to-accent targets — fixed by guarding on act
+   as well as step; and the flip-accent control showed disabled through all
+   of Act II instead of staying hidden until the inversion prompt and hiding
+   again once settled — fixed with `isFlipControlVisible()` and covered by
+   new tests. Responsive behaviour (annotation stacking, touch targets) is
+   the same `@media (width <= 780px)` rule Act I already used. Verified live
+   at both viewports: full Act I→II handoff, all five annotations, the flip
+   control's reveal/disable/hide lifecycle, both comparison rounds, back-nav
+   from inside Act II, and state surviving a mid-interaction resize — zero
+   console errors. 25 new tests; pnpm check 102/102:
+   [`3124532`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/31245325aa081515ed1dfe635336d805be1632a4).
+
+7. **Act III turns the single practice-pad voice into a full drum kit and
+   introduces the 3-3-2 kick displacement** — continuous hi-hat on every
+   eighth, snare fixed on the backbeat, and a guided kick move from the
+   plain 1-and-3 pattern to kick-on-1/offbeat-after-2/4. This is the first
+   scene with two simultaneous VexFlow voices on one stave (upstem
+   hi-hat/snare beamed continuously, downstem kick beamed only across
+   contiguous runs), and the first to generalise Act I's single-arc
+   annotation primitive into group braces and an arbitrary arc between two
+   named beats. Real-browser and manual notation inspection (clef, notehead
+   line, beaming, accent placement — never trusting a score that merely
+   renders without throwing) confirmed both guided kick moves land correctly
+   and the closing basic/3-3-2 comparison round-trips. 31 new tests; pnpm
+   check 140/140, zero console errors at both viewports:
+   [`f3f6f16`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/f3f6f167b673b99f055f78267c0900fe180ac49a).
+
+8. **Act IV adds a second, independent voice (bass) that first locks to the
+   kick, then answers it instead** — a real bass-clef stave beneath the
+   drum-kit stave, with alignment lines and a circled "locks." while the two
+   voices coincide, then three arcs pairing each locked attack to where the
+   bass moves to once it becomes syncopated. A real-browser pass found a
+   shared-foundation layout bug, not an Act IV-only one: `.staff-frame`'s
+   height and VexFlow's stave-centering formula both derive from the same
+   container height, so `.score-stage`'s flex-centering silently absorbed
+   the frame growth needed for the second stave and left the bass stave
+   clipped. Fixed by anchoring the stave to a fixed y-offset once a bass
+   voice is present (so added frame height becomes visible room, not
+   centering slack) rather than special-casing Act IV's layout. Verified
+   live at both viewports: bass clef, C3 notehead placement, rests,
+   alignment lines, and all three arcs render correctly. 54 new Act IV
+   checks; pnpm check 168/168:
+   [`f063113`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/f0631134fe0ead777e54fe02acb1a1595eb8e32e).
+
+9. **Act V moves from locking/answering into a full call-and-response
+   conversation** — kick calls beat 3, bass answers the offbeat after beat
+   3 — after a crowding fix moves a low voice off the offbeat after beat 4,
+   then resolves into a full-performance playback of the combined groove
+   plus a five-line closing sequence. This is the exhibition's musical
+   payoff: every earlier act's relationship (equal pulse → accent placement
+   → backbeat reversal → full kit → 3-3-2 → lock → answer) converges into
+   one groove a visitor hears played straight through. Built entirely on
+   existing seams (`selectTarget`/`triggerX` from Acts III-IV, the shared
+   `positionArcs` helper from Acts I and IV) rather than new mechanisms.
+   Verified live at both viewports: the crowding-fix interaction, the
+   call/response itself, the annotation crossfade mid-transition, the
+   full-performance playback on both staves, and the settled extension seam
+   continuing playback without stray UI. 195 tests green:
+   [`260082b`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/260082b6da10e26fc4af67f6a09d47188a326ffc).
+
+10. **The laboratory hands the instrument to the visitor** — free-play
+    drum-kit + bass grid, mute toggles, tempo/volume, 7 presets, and 5
+    relationship-highlighting tools — followed by the acknowledgement page's
+    replay/return links, closing the exhibition's arc from guided listening
+    to independent experimentation. Two shared-foundation defects surfaced
+    here, both fixed in the shared code rather than laboratory-only patches:
+    VexFlow's collision heuristic re-centred a rest's notehead toward the
+    midpoint of neighbouring voices whenever kick/bass both rested at the
+    same tick as active notes either side (it reasons only in stave-relative
+    line numbers, with no awareness that the kick/bass voices are joined
+    for x-alignment across two physically separate staves) — fixed by
+    re-pinning every rest to its instrument's fixed line right after
+    formatting; and the laboratory's per-row click-target band used one
+    fixed 20px half-height for all four instrument rows, but the real gaps
+    between rows vary (as little as ~20px between snare and kick), so
+    adjacent rows stole each other's clicks — fixed by deriving the band
+    from the smallest gap actually present at render time. Verified live at
+    both viewports: the full title→Act I-V→laboratory→acknowledgement
+    journey, every mute/playback/tempo/volume/preset/tool control, keyboard
+    shortcuts (digits 1-7, R), arrow-key grid navigation, the adjacent-row
+    click-stealing regression at real row-boundary pixels, and
+    `prefers-reduced-motion` (draw-on suppressed, opacity fades kept). Zero
+    application bugs found in this milestone itself; pnpm check 239/239:
+    [`232843b`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/232843b9cd8165ec9bb712449ccb767da975655e).
+
+11. **A full-journey integration pass, on 2026-08-17, found one more
+    shared-foundation defect a green suite couldn't see.** With all five
+    acts, the laboratory, and the acknowledgement page in place, I walked
+    the complete title-to-acknowledgement path twice at both viewports:
+    back-nav from every act, a full restart-to-title cycle, header
+    mute-toggle isolation, keyboard-only navigation (Tab/Enter and the
+    global vs. focus-owned Space bar), resize mid-rhythm, audio/timing
+    integrity, and visual notation inspection. `.laboratory-flow`
+    (inactive) sets `pointer-events: none` on itself, but CSS resolves
+    pointer-events per element rather than blocking a descendant from
+    opting back in, so `.lab-note-target`'s own unconditional
+    `pointer-events: auto` kept its buttons hit-testable even while the
+    laboratory sat off-screen at `opacity: 0`. Once a visitor opened the
+    laboratory once and restarted, those stale hit-targets sat on top of
+    later acts' same-position beat-targets and silently swallowed clicks —
+    reproduced live via `document.elementFromPoint` resolving to the lab
+    button instead of the active act's own control. Fixed by scoping the
+    override to `.laboratory-flow-active .lab-note-target` and added
+    `spec/laboratory-pointer-events.test.ts` so the CSS can't silently
+    regress to the unconditional form. Everything else in the review passed
+    clean: the shared exit-to-title handler tears down `AudioContext`/the
+    scheduler correctly regardless of which act calls it; mute-toggle and
+    resizes don't disturb exhibition/audio state; keyboard-only input
+    reaches full parity with mouse/touch; zero console errors across two
+    full run-throughs. One gap was flagged, not fixed: the back-nav control
+    shows a static "title" label and always performs a full return to the
+    title screen, rather than naming the actual destination act and
+    restoring its settled state — real back-stack navigation is a larger,
+    more product-decision-laden change than this verification milestone's
+    scope. pnpm check 241/241 (2 new tests):
+    [`2721f00`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-Asuka121380/commit/2721f0077e86f7ae1fdb089955bd636fb0a7ca5b).
+
 ## Before you ship
 
 `pnpm check:evidence` verifies the citations above resolve to real commits,
