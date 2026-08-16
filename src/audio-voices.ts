@@ -55,14 +55,19 @@ const KICK_PITCH_SWEEP_SECONDS = 0.045;
 const KICK_DECAY_SECONDS = 0.22;
 const KICK_HIT_GAIN = 0.9;
 
-// Bass (Act IV, EXHIBITION_FLOW.md section 9): a sustained sine tone at a
-// fixed pitch, no pitch sweep — distinct from the kick's short percussive
-// thump so the two read as separate instruments in conversation rather than
-// a doubled kick. A gentle lowpass keeps the tone warm rather than buzzy.
-const BASS_FREQUENCY_HZ = 82;
-const BASS_FILTER_FREQUENCY_HZ = 400;
-const BASS_DECAY_SECONDS = 0.35;
-const BASS_HIT_GAIN = 0.8;
+// Bass (Act IV, EXHIBITION_FLOW.md section 9): a sustained triangle tone at
+// a fixed pitch, no pitch sweep — distinct from the kick's short percussive
+// downward-swept sine so the two read as separate instruments even on a
+// small built-in speaker. C3 (documented as the exhibition's fixed pitch)
+// is ~130.81 Hz, not the ~82 Hz this previously used; the triangle wave's
+// odd harmonics carry that pitch through a lowpass raised enough to keep
+// some of them, and a slightly slower attack plus longer decay than the
+// kick give it a stable, sustained body rather than a percussive hit.
+const BASS_FREQUENCY_HZ = 130.8128;
+const BASS_FILTER_FREQUENCY_HZ = 800;
+const BASS_ATTACK_SECONDS = 0.01;
+const BASS_DECAY_SECONDS = 0.4;
+const BASS_HIT_GAIN = 0.7;
 
 export interface PracticePadVoice {
   readonly masterGain: GainNode;
@@ -274,7 +279,7 @@ export function createDrumKitVoices(audioContext: AudioContext): DrumKitVoices {
 
   function triggerBass(time: number, velocity: number): void {
     const oscillator = audioContext.createOscillator();
-    oscillator.type = "sine";
+    oscillator.type = "triangle";
     oscillator.frequency.setValueAtTime(BASS_FREQUENCY_HZ, time);
 
     const filter = audioContext.createBiquadFilter();
@@ -285,11 +290,11 @@ export function createDrumKitVoices(audioContext: AudioContext): DrumKitVoices {
     envelope.gain.setValueAtTime(0, time);
     envelope.gain.linearRampToValueAtTime(
       velocity * BASS_HIT_GAIN,
-      time + ENVELOPE_ATTACK_SECONDS,
+      time + BASS_ATTACK_SECONDS,
     );
     envelope.gain.exponentialRampToValueAtTime(
       0.0001,
-      time + ENVELOPE_ATTACK_SECONDS + BASS_DECAY_SECONDS,
+      time + BASS_ATTACK_SECONDS + BASS_DECAY_SECONDS,
     );
 
     oscillator.connect(filter);
@@ -297,7 +302,7 @@ export function createDrumKitVoices(audioContext: AudioContext): DrumKitVoices {
     envelope.connect(masterGain);
 
     oscillator.start(time);
-    oscillator.stop(time + BASS_DECAY_SECONDS + ENVELOPE_ATTACK_SECONDS);
+    oscillator.stop(time + BASS_DECAY_SECONDS + BASS_ATTACK_SECONDS);
   }
 
   function trigger(

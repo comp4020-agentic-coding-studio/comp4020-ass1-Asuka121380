@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { Stave } from "vexflow";
+import { describe, expect, it, vi } from "vitest";
 import {
   BASIC_KICK_INDICES,
   BEAT_FOUR_INDEX,
   BEAT_ONE_INDEX,
   BEAT_THREE_INDEX,
   BEAT_TWO_INDEX,
+  LOCK_BASS_INDICES,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
   SYNCOPATED_KICK_INDICES,
+  addBassVoice,
   createDrumKitPattern,
   createEmptyStavePattern,
   createPulsePattern,
@@ -164,3 +167,79 @@ describe("notation — Act III drum kit", () => {
 function countFlags(svg: SVGSVGElement): number {
   return svg.querySelectorAll(".vf-flag").length;
 }
+
+// The upper (hi-hat/snare) voice's notehead glyphs draw at y=100/130 and
+// never get reassigned to another stave, so their x is the ground-truth
+// rhythmic grid — the same one noteBoxes/the playhead/cross-staff
+// annotation lines already use (see notation.ts's `xs = upperNotes.map(...)`).
+function upperVoiceNoteheadXs(svg: SVGSVGElement): number[] {
+  return Array.from(svg.querySelectorAll(".vf-notehead text"))
+    .filter((text) => text.getAttribute("y") === "100")
+    .map((text) => Number(text.getAttribute("x")));
+}
+
+// The bass voice's own noteheads, drawn on the second (lower) stave.
+function bassVoiceNoteheadXs(svg: SVGSVGElement): number[] {
+  return Array.from(svg.querySelectorAll(".vf-notehead text"))
+    .filter((text) => text.getAttribute("y") === "289")
+    .map((text) => Number(text.getAttribute("x")));
+}
+
+describe("notation — Act IV bass alignment", () => {
+  it("explicitly syncs the bass stave's note-start x to the drum stave's, rather than trusting the two clefs' modifier widths to match", () => {
+    // jsdom has no canvas text-metrics, so VexFlow's own clef/time-signature
+    // glyph-width measurement collapses to a constant here regardless of
+    // clef content -- a plain x-coordinate comparison would pass even
+    // against the unfixed bug in this environment. Spying on the explicit
+    // setNoteStartX call this fix adds is what actually pins the mechanism:
+    // it fails if that call is ever removed, independent of font metrics.
+    const setNoteStartXSpy = vi.spyOn(Stave.prototype, "setNoteStartX");
+    const getNoteStartXSpy = vi.spyOn(Stave.prototype, "getNoteStartX");
+
+    renderPulseScore(
+      stageDiv(),
+      addBassVoice(createDrumKitPattern(96, BASIC_KICK_INDICES), [0, 1, 2, 3, 4, 5, 6, 7]),
+    );
+
+    expect(setNoteStartXSpy).toHaveBeenCalledTimes(1);
+    const bassStaveInstance = setNoteStartXSpy.mock.instances[0];
+    const syncedValue = setNoteStartXSpy.mock.calls[0][0];
+
+    // The synced value must be a real read of the *other* (drum) stave's
+    // own computed note-start x, not an arbitrary or self-referential value.
+    const readFromDrumStave = getNoteStartXSpy.mock.results.some(
+      (result, i) =>
+        getNoteStartXSpy.mock.instances[i] !== bassStaveInstance &&
+        result.value === syncedValue,
+    );
+    expect(readFromDrumStave).toBe(true);
+
+    setNoteStartXSpy.mockRestore();
+    getNoteStartXSpy.mockRestore();
+  });
+
+  it("renders corresponding drum and bass noteheads at the same x, within a small rendering tolerance", () => {
+    const { svg } = renderPulseScore(
+      stageDiv(),
+      addBassVoice(createDrumKitPattern(96, BASIC_KICK_INDICES), [0, 1, 2, 3, 4, 5, 6, 7]),
+    );
+
+    const drumXs = upperVoiceNoteheadXs(svg);
+    const bassXs = bassVoiceNoteheadXs(svg);
+    expect(drumXs.length).toBe(8);
+    expect(bassXs.length).toBe(8);
+
+    const TOLERANCE_PX = 0.5;
+    for (let i = 0; i < drumXs.length; i++) {
+      expect(Math.abs(bassXs[i] - drumXs[i])).toBeLessThanOrEqual(TOLERANCE_PX);
+    }
+  });
+
+  it("shows the same 4/4 time signature on the bass stave as the drum stave", () => {
+    const { svg } = renderPulseScore(
+      stageDiv(),
+      addBassVoice(createDrumKitPattern(96, BASIC_KICK_INDICES), LOCK_BASS_INDICES),
+    );
+    expect(svg.querySelectorAll(".vf-timesignature").length).toBe(2);
+  });
+});

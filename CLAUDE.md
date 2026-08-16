@@ -198,6 +198,17 @@ says about the developer you're becoming.
   media into the repo, reference the committed filename rather than an
   absolute local path, and verify the exact extension casing in a production
   build.
+- **Two VexFlow staves only share an x-grid if you force it.** Matching
+  clefs/time-signatures on two `Stave`s does not guarantee matching
+  `getNoteStartX()` --- different modifier glyphs (e.g. percussion clef vs.
+  bass clef) measure different widths, so each stave's own computed
+  note-start x can differ even with the same time signature added to both.
+  When two staves must share a rhythmic grid, call
+  `staveB.setNoteStartX(staveA.getNoteStartX())` explicitly rather than
+  trusting the modifiers to match --- and note jsdom can't catch a regression
+  here, since it has no canvas text metrics and `getNoteStartX()` collapses
+  to a constant there regardless of clef content; a real-browser check is
+  required alongside the spy-based unit test.
 
 ## Where the Beat Leans --- project rules
 

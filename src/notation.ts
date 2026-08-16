@@ -273,7 +273,15 @@ function drawDrumKit(
     bassStave = new Stave(stave.getX(), stave.getBottomY() + BASS_STAVE_GAP, stave.getWidth());
     bassStave.setStyle({ fillStyle: INK_COLOR, strokeStyle: INK_COLOR });
     bassStave.addClef("bass");
+    bassStave.addTimeSignature("4/4");
     bassStave.setContext(context).draw();
+    // The bass clef's modifier glyphs measure narrower than the drum
+    // stave's percussion clef + time signature, so VexFlow's own
+    // getNoteStartX() computation puts the bass voice's first note left of
+    // the drum voice's even with a matching time signature. Force the same
+    // note-start x explicitly rather than relying on the two staves'
+    // modifier widths happening to match.
+    bassStave.setNoteStartX(stave.getNoteStartX());
 
     bassNotes = Array.from({ length: slotCount }, (_, i) =>
       bass.slots[i]?.active
