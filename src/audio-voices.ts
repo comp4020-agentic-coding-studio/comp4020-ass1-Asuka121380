@@ -55,6 +55,15 @@ const KICK_PITCH_SWEEP_SECONDS = 0.045;
 const KICK_DECAY_SECONDS = 0.22;
 const KICK_HIT_GAIN = 0.9;
 
+// Bass (Act IV, EXHIBITION_FLOW.md section 9): a sustained sine tone at a
+// fixed pitch, no pitch sweep — distinct from the kick's short percussive
+// thump so the two read as separate instruments in conversation rather than
+// a doubled kick. A gentle lowpass keeps the tone warm rather than buzzy.
+const BASS_FREQUENCY_HZ = 82;
+const BASS_FILTER_FREQUENCY_HZ = 400;
+const BASS_DECAY_SECONDS = 0.35;
+const BASS_HIT_GAIN = 0.8;
+
 export interface PracticePadVoice {
   readonly masterGain: GainNode;
   trigger(time: number, velocity: number, accent?: boolean): void;
@@ -263,6 +272,34 @@ export function createDrumKitVoices(audioContext: AudioContext): DrumKitVoices {
     oscillator.stop(time + KICK_DECAY_SECONDS + ENVELOPE_ATTACK_SECONDS);
   }
 
+  function triggerBass(time: number, velocity: number): void {
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(BASS_FREQUENCY_HZ, time);
+
+    const filter = audioContext.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = BASS_FILTER_FREQUENCY_HZ;
+
+    const envelope = audioContext.createGain();
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(
+      velocity * BASS_HIT_GAIN,
+      time + ENVELOPE_ATTACK_SECONDS,
+    );
+    envelope.gain.exponentialRampToValueAtTime(
+      0.0001,
+      time + ENVELOPE_ATTACK_SECONDS + BASS_DECAY_SECONDS,
+    );
+
+    oscillator.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(masterGain);
+
+    oscillator.start(time);
+    oscillator.stop(time + BASS_DECAY_SECONDS + ENVELOPE_ATTACK_SECONDS);
+  }
+
   function trigger(
     instrument: Instrument,
     time: number,
@@ -281,6 +318,9 @@ export function createDrumKitVoices(audioContext: AudioContext): DrumKitVoices {
         return;
       case "kick":
         triggerKick(time, velocity);
+        return;
+      case "bass":
+        triggerBass(time, velocity);
         return;
     }
   }

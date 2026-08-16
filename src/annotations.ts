@@ -4,9 +4,11 @@ import {
   BEAT_TWO_INDEX,
   BEAT_FOUR_INDEX,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  LOCK_BASS_INDICES,
+  ANSWER_BASS_INDICES,
   type EighthIndex,
 } from "./rhythm-model";
-import type { Act2Step, Act3Step, ExhibitionState } from "./exhibition-state";
+import type { Act2Step, Act3Step, Act4Step, ExhibitionState } from "./exhibition-state";
 
 export type AnnotationPosition =
   | "upper-left"
@@ -36,11 +38,24 @@ export interface AnnotationContent {
     | "act3-annotation-6"
     | "act3-annotation-7"
     | "act3-compare-1"
-    | "act3-compare-2";
+    | "act3-compare-2"
+    | "act4-annotation-1"
+    | "act4-annotation-2"
+    | "act4-annotation-2b"
+    | "act4-annotation-3"
+    | "act4-annotation-4"
+    | "act4-annotation-4b"
+    | "act4-compare-lock"
+    | "act4-compare-answer"
+    | "act4-final-1"
+    | "act4-final-2";
   readonly position: AnnotationPosition;
   readonly lines: readonly string[];
   // The word within `lines` to underline with a hand-drawn stroke.
   readonly underlineWord?: string;
+  // The word within `lines` to circle with a hand-drawn stroke (Act IV
+  // annotation-2b's "Circle 'locks.'").
+  readonly circleWord?: string;
   // Notes an arrow should point to (e.g. Act I's "tap 1 and 3" moment, or Act
   // II's accent-position call-outs).
   readonly arrowTargets?: readonly EighthIndex[];
@@ -61,10 +76,15 @@ export interface AnnotationContent {
     readonly endIndex: EighthIndex;
     readonly label?: string;
   }[];
-  // Annotation-3's hand-written arc from the bass-drum note on beat 3 to the
-  // offbeat after beat 2, drawn below the staff.
-  readonly arcFrom?: EighthIndex;
-  readonly arcTo?: EighthIndex;
+  // Hand-written arcs between eighth-note slots, drawn below the staff — Act
+  // III's annotation-3 uses one (bass-drum note on beat 3 to the offbeat
+  // after beat 2), Act IV's annotation-4 uses three (each bass-drum attack to
+  // its following "answer" bass note).
+  readonly arcs?: readonly { readonly from: EighthIndex; readonly to: EighthIndex }[];
+  // Act IV annotation-2's vertical alignment lines between coincident
+  // bass-drum and bass noteheads (drawn using notation.ts's kickNoteYs/
+  // bassNoteYs exports rather than re-deriving stave geometry).
+  readonly alignmentIndices?: readonly EighthIndex[];
 }
 
 const NEXT_BAR: AnnotationContent = {
@@ -224,8 +244,7 @@ function act3AnnotationForStep(step: Act3Step): AnnotationContent | null {
         position: "lower-left",
         lines: ["Let the kick step outside the square.", "Pull the kick on 3 one eighth early. ↖"],
         arrowTargets: [OFFBEAT_AFTER_BEAT_TWO_INDEX],
-        arcFrom: BEAT_THREE_INDEX,
-        arcTo: OFFBEAT_AFTER_BEAT_TWO_INDEX,
+        arcs: [{ from: BEAT_THREE_INDEX, to: OFFBEAT_AFTER_BEAT_TWO_INDEX }],
       };
     case "annotation-4":
       return {
@@ -280,6 +299,103 @@ function act3AnnotationForStep(step: Act3Step): AnnotationContent | null {
   }
 }
 
+// EXHIBITION_FLOW.md section 9 (Act IV). The lock/answer bass arcs pair each
+// LOCK_BASS_INDICES attack with its corresponding ANSWER_BASS_INDICES attack
+// (same beat, one eighth later) rather than a hard-coded literal, so the arcs
+// stay correct if either index list is ever retuned.
+const ANSWER_ARCS: readonly { from: EighthIndex; to: EighthIndex }[] =
+  LOCK_BASS_INDICES.map((from, i) => ({ from, to: ANSWER_BASS_INDICES[i] }));
+
+function act4AnnotationForStep(step: Act4Step): AnnotationContent | null {
+  switch (step) {
+    case "annotation-1":
+      return {
+        id: "act4-annotation-1",
+        position: "upper-left",
+        lines: [
+          "So far, the kit has carried the groove by itself.",
+          "A groove rarely lives alone.",
+          "Give it a low voice. ↓",
+        ],
+      };
+    case "bass-queued":
+      return NEXT_BAR;
+    case "lock-listening":
+      return null;
+    case "annotation-2":
+      return {
+        id: "act4-annotation-2",
+        position: "upper-right",
+        lines: ["Same rhythm. More weight."],
+        alignmentIndices: LOCK_BASS_INDICES,
+      };
+    case "annotation-2b":
+      return {
+        id: "act4-annotation-2b",
+        position: "upper-right",
+        lines: ["When they land together,", "the groove locks."],
+        circleWord: "locks.",
+      };
+    case "annotation-3":
+      return {
+        id: "act4-annotation-3",
+        position: "lower-left",
+        lines: ["What if the bass arrives one step later?", "Shift the bass →"],
+      };
+    case "answer-queued":
+      return NEXT_BAR;
+    case "answer-listening":
+      return null;
+    case "annotation-4":
+      return {
+        id: "act4-annotation-4",
+        position: "upper-left",
+        lines: ["The bass no longer follows.", "It answers."],
+        arcs: ANSWER_ARCS,
+      };
+    case "annotation-4b":
+      return {
+        id: "act4-annotation-4b",
+        position: "upper-right",
+        lines: ["The silence between them matters too."],
+      };
+    case "compare-prompt-lock":
+      return {
+        id: "act4-compare-lock",
+        position: "lower-left",
+        lines: ["Listen to the lock.", "lock ↓"],
+      };
+    case "compare-lock-queued":
+      return NEXT_BAR;
+    case "compare-lock-listening":
+      return null;
+    case "compare-prompt-answer":
+      return {
+        id: "act4-compare-answer",
+        position: "lower-left",
+        lines: ["Now the answer.", "answer ↓"],
+      };
+    case "compare-answer-queued":
+      return NEXT_BAR;
+    case "compare-answer-listening":
+      return null;
+    case "final-1":
+      return {
+        id: "act4-final-1",
+        position: "upper-left",
+        lines: ["Together feels strong.", "Apart creates movement."],
+      };
+    case "final-2":
+      return {
+        id: "act4-final-2",
+        position: "upper-right",
+        lines: ["Can one bar do both?", "build a pocket ↘"],
+      };
+    case "settled":
+      return null;
+  }
+}
+
 // One annotation is visible at a time (EXHIBITION_FLOW.md section 4.4): the
 // exhibition step is the single source of truth for what's on screen, so
 // there's nothing else to derive this from.
@@ -293,5 +409,7 @@ export function annotationForStep(state: ExhibitionState): AnnotationContent | n
       return act2AnnotationForStep(state.step);
     case "act-3":
       return act3AnnotationForStep(state.step);
+    case "act-4":
+      return act4AnnotationForStep(state.step);
   }
 }

@@ -6,20 +6,29 @@ import {
   ACT1_TARGETS,
   advanceBar,
   canFlipAccents,
+  canTriggerBringInBass,
   canTriggerCompare332,
+  canTriggerCompareAnswer,
   canTriggerCompareBasic,
+  canTriggerCompareLock,
   canTriggerOrchestrate,
+  canTriggerShiftBass,
   isFlipControlVisible,
   pendingAccentTargetsForStep,
+  pendingBassIndicesForStep,
   pendingKickIndicesForStep,
   returnToTitle,
   selectTarget,
   selectableTargets,
   startExhibition,
+  triggerBringInBass,
   triggerCompare332,
+  triggerCompareAnswer,
   triggerCompareBasic,
+  triggerCompareLock,
   triggerFlip,
   triggerOrchestrate,
+  triggerShiftBass,
   type ActId,
   type ExhibitionState,
 } from "./src/exhibition-state";
@@ -32,12 +41,15 @@ import {
   BEAT_THREE_INDEX,
   BEAT_TWO_INDEX,
   EIGHTH_LABELS,
+  LOCK_BASS_INDICES,
   OFFBEAT_AFTER_BEAT_TWO_INDEX,
+  addBassVoice,
   applyPendingPattern,
   createDrumKitPattern,
   createInitialRhythmState,
   queuePendingPattern,
   withAccentsAt,
+  withBassIndices,
   withKickIndices,
   type EighthIndex,
   type RhythmState,
@@ -99,6 +111,18 @@ const compareBasicButtonEl = document.querySelector<HTMLButtonElement>(
 const compare332ButtonEl = document.querySelector<HTMLButtonElement>(
   '[data-testid="compare-332"]',
 );
+const bringInBassButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="bring-in-bass"]',
+);
+const shiftBassButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="shift-bass"]',
+);
+const compareLockButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="compare-lock"]',
+);
+const compareAnswerButtonEl = document.querySelector<HTMLButtonElement>(
+  '[data-testid="compare-answer"]',
+);
 
 if (
   titleRoot &&
@@ -117,7 +141,11 @@ if (
   actLabelElQuery &&
   orchestrateButtonEl &&
   compareBasicButtonEl &&
-  compare332ButtonEl
+  compare332ButtonEl &&
+  bringInBassButtonEl &&
+  shiftBassButtonEl &&
+  compareLockButtonEl &&
+  compareAnswerButtonEl
 ) {
   const stageEl = stage;
   const staffFrame = staffFrameEl;
@@ -129,6 +157,10 @@ if (
   const orchestrateButton = orchestrateButtonEl;
   const compareBasicButton = compareBasicButtonEl;
   const compare332Button = compare332ButtonEl;
+  const bringInBassButton = bringInBassButtonEl;
+  const shiftBassButton = shiftBassButtonEl;
+  const compareLockButton = compareLockButtonEl;
+  const compareAnswerButton = compareAnswerButtonEl;
   let rhythmState: RhythmState = createInitialRhythmState();
   let exhibitionState: ExhibitionState = startExhibition();
   let scheduler: Scheduler | null = null;
@@ -137,6 +169,8 @@ if (
   let muted = false;
   let currentAnnotationId: AnnotationContent["id"] | null = null;
   let latestNoteBoxes: readonly NoteBox[] = [];
+  let latestKickNoteYs: readonly number[] = [];
+  let latestBassNoteYs: readonly number[] = [];
   const cursorTimeouts = new Set<ReturnType<typeof setTimeout>>();
   let annotationFadeTimeoutId: ReturnType<typeof setTimeout> | null = null;
   // Kept in sync with .annotation-note's CSS transition duration in
@@ -229,15 +263,33 @@ if (
   groupBracesSvg.style.display = "none";
   staffFrame.append(groupBracesSvg);
 
-  // Annotation-3's hand-written arc from the kick's old beat-3 placement to
-  // the offbeat after beat 2 — a single curved stroke below the staff.
+  // Hand-written arcs below the staff — Act III's annotation-3 draws one
+  // (the kick's old beat-3 placement to the offbeat after beat 2), Act IV's
+  // annotation-4 draws three (each locked bass attack to its answering one).
+  // A full-frame overlay like groupBracesSvg, since more than one arc can be
+  // on screen at once.
   const arcSvg = document.createElementNS(SVG_NS, "svg");
   arcSvg.setAttribute("class", "annotation-arc");
   arcSvg.style.display = "none";
-  const arcPath = document.createElementNS(SVG_NS, "path");
-  arcPath.setAttribute("class", "annotation-arc-path");
-  arcSvg.append(arcPath);
   staffFrame.append(arcSvg);
+
+  // Act IV annotation-2's vertical alignment lines between a locked bass
+  // attack and the kick note it lands with — drawn using notation.ts's
+  // kickNoteYs/bassNoteYs exports rather than re-deriving stave geometry.
+  const alignmentSvg = document.createElementNS(SVG_NS, "svg");
+  alignmentSvg.setAttribute("class", "annotation-alignment-lines");
+  alignmentSvg.style.display = "none";
+  staffFrame.append(alignmentSvg);
+
+  // Act IV annotation-2b's "Circle 'locks.'" — a single hand-drawn loop
+  // around one word in the annotation copy.
+  const circleSvg = document.createElementNS(SVG_NS, "svg");
+  circleSvg.setAttribute("class", "annotation-circle");
+  circleSvg.style.display = "none";
+  const circlePath = document.createElementNS(SVG_NS, "path");
+  circlePath.setAttribute("class", "annotation-circle-path");
+  circleSvg.append(circlePath);
+  staffFrame.append(circleSvg);
 
   // Used when a mark's geometry is set for the first time at a new
   // annotation's content-swap moment — animates the hand-drawn stroke in.
@@ -272,16 +324,26 @@ if (
     target: HTMLElement,
     line: string,
     underlineWord?: string,
+    circleWord?: string,
   ): void {
-    if (!underlineWord || !line.includes(underlineWord)) {
+    const specialWord =
+      underlineWord && line.includes(underlineWord)
+        ? underlineWord
+        : circleWord && line.includes(circleWord)
+          ? circleWord
+          : undefined;
+    if (!specialWord) {
       target.append(document.createTextNode(line));
       return;
     }
-    const [before, after] = line.split(underlineWord);
+    const [before, after] = line.split(specialWord);
     target.append(document.createTextNode(before));
     const span = document.createElement("span");
-    span.className = "annotation-underline-word";
-    span.textContent = underlineWord;
+    span.className =
+      specialWord === underlineWord
+        ? "annotation-underline-word"
+        : "annotation-circle-word";
+    span.textContent = specialWord;
     target.append(span);
     target.append(document.createTextNode(after));
   }
@@ -315,9 +377,9 @@ if (
       if (index === annotation.smallLineIndex) {
         const small = target.appendChild(document.createElement("span"));
         small.classList.add("annotation-small-line");
-        appendAnnotationLine(small, line, annotation.underlineWord);
+        appendAnnotationLine(small, line, annotation.underlineWord, annotation.circleWord);
       } else {
-        appendAnnotationLine(target, line, annotation.underlineWord);
+        appendAnnotationLine(target, line, annotation.underlineWord, annotation.circleWord);
       }
     });
     // Next frame, so the browser registers the pre-fade state before the
@@ -444,17 +506,18 @@ if (
     }
   }
 
-  // Annotation-3's arc from the kick's old placement to its new offbeat,
-  // drawn below the staff as a single downward-bulging curve.
-  function positionArc(
+  // Annotation-3's single arc (kick's old placement to its new offbeat) and
+  // Act IV annotation-4's three arcs (each locked bass attack to its
+  // answering one) — one downward-bulging curve per `arcs` entry, drawn
+  // below the staff.
+  function positionArcs(
     annotation: AnnotationContent,
     noteBoxes: readonly NoteBox[],
     drawOn: boolean,
   ): void {
-    const fromBox =
-      annotation.arcFrom !== undefined ? noteBoxes[annotation.arcFrom] : undefined;
-    const toBox = annotation.arcTo !== undefined ? noteBoxes[annotation.arcTo] : undefined;
-    if (!fromBox || !toBox) {
+    arcSvg.replaceChildren();
+    const arcs = annotation.arcs ?? [];
+    if (arcs.length === 0) {
       arcSvg.style.display = "none";
       return;
     }
@@ -463,15 +526,101 @@ if (
     arcSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     arcSvg.style.display = "block";
 
-    const startX = fromBox.x + fromBox.w / 2;
-    const startY = fromBox.y + fromBox.h;
-    const endX = toBox.x + toBox.w / 2;
-    const endY = toBox.y + toBox.h;
-    const controlX = (startX + endX) / 2;
-    const controlY = Math.max(startY, endY) + 24;
-    arcPath.setAttribute("d", `M${startX},${startY} Q${controlX},${controlY} ${endX},${endY}`);
-    if (drawOn) animateDrawOn(arcPath);
-    else setPathFullyDrawn(arcPath);
+    for (const arc of arcs) {
+      const fromBox = noteBoxes[arc.from];
+      const toBox = noteBoxes[arc.to];
+      if (!fromBox || !toBox) continue;
+      const startX = fromBox.x + fromBox.w / 2;
+      const startY = fromBox.y + fromBox.h;
+      const endX = toBox.x + toBox.w / 2;
+      const endY = toBox.y + toBox.h;
+      const controlX = (startX + endX) / 2;
+      const controlY = Math.max(startY, endY) + 24;
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("class", "annotation-arc-path");
+      path.setAttribute("d", `M${startX},${startY} Q${controlX},${controlY} ${endX},${endY}`);
+      arcSvg.append(path);
+      if (drawOn) animateDrawOn(path);
+      else setPathFullyDrawn(path);
+    }
+  }
+
+  // Act IV annotation-2's vertical lines connecting a locked bass attack's
+  // notehead to the kick notehead it lands with, using the same-frame Y
+  // coordinates notation.ts already computed while drawing both staves.
+  function positionAlignmentLines(annotation: AnnotationContent, drawOn: boolean): void {
+    alignmentSvg.replaceChildren();
+    const indices = annotation.alignmentIndices ?? [];
+    if (indices.length === 0) {
+      alignmentSvg.style.display = "none";
+      return;
+    }
+    const w = staffFrame.clientWidth;
+    const h = staffFrame.clientHeight;
+    alignmentSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    alignmentSvg.style.display = "block";
+
+    for (const index of indices) {
+      const box = latestNoteBoxes[index];
+      const kickY = latestKickNoteYs[index];
+      const bassY = latestBassNoteYs[index];
+      if (!box || kickY === undefined || bassY === undefined) continue;
+      const x = box.x + box.w / 2;
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("class", "annotation-alignment-line-path");
+      path.setAttribute("d", `M${x},${kickY} L${x},${bassY}`);
+      alignmentSvg.append(path);
+      if (drawOn) animateDrawOn(path);
+      else setPathFullyDrawn(path);
+    }
+  }
+
+  const CIRCLE_PAD_X = 8;
+  const CIRCLE_PAD_Y = 4;
+
+  // Act IV annotation-2b's "Circle 'locks.'" — a single hand-drawn loop
+  // around the word wrapped in .annotation-circle-word, built from four
+  // Bezier quarter-arcs with a small deterministic asymmetry (not
+  // Math.random(), so runs stay reproducible for screenshot comparison) so
+  // the oval reads as drawn rather than a perfect ellipse.
+  function positionCircle(annotation: AnnotationContent, drawOn: boolean): void {
+    if (!annotation.circleWord) {
+      circleSvg.style.display = "none";
+      return;
+    }
+    const wordSpan = annotationNote.querySelector<HTMLSpanElement>(".annotation-circle-word");
+    if (!wordSpan) {
+      circleSvg.style.display = "none";
+      return;
+    }
+    const frameRect = staffFrame.getBoundingClientRect();
+    const wordRect = wordSpan.getBoundingClientRect();
+    const left = wordRect.left - frameRect.left - CIRCLE_PAD_X;
+    const top = wordRect.top - frameRect.top - CIRCLE_PAD_Y;
+    const width = Math.max(wordRect.width + CIRCLE_PAD_X * 2, 1);
+    const height = Math.max(wordRect.height + CIRCLE_PAD_Y * 2, 1);
+    circleSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    circleSvg.style.left = `${left}px`;
+    circleSvg.style.top = `${top}px`;
+    circleSvg.style.width = `${width}px`;
+    circleSvg.style.height = `${height}px`;
+    circleSvg.style.display = "block";
+
+    const cx = width / 2;
+    const cy = height / 2;
+    const rx = width / 2 - 1;
+    const ry = height / 2 - 1;
+    const wobble = Math.min(rx, ry) * 0.08;
+    circlePath.setAttribute(
+      "d",
+      `M${cx - rx},${cy} ` +
+        `C${cx - rx},${cy - ry - wobble} ${cx - rx * 0.4},${cy - ry} ${cx},${cy - ry} ` +
+        `C${cx + rx * 0.5},${cy - ry} ${cx + rx},${cy - ry * 0.5} ${cx + rx},${cy} ` +
+        `C${cx + rx},${cy + ry + wobble} ${cx + rx * 0.4},${cy + ry} ${cx},${cy + ry} ` +
+        `C${cx - rx * 0.5},${cy + ry} ${cx - rx},${cy + ry * 0.5} ${cx - rx - wobble},${cy}`,
+    );
+    if (drawOn) animateDrawOn(circlePath);
+    else setPathFullyDrawn(circlePath);
   }
 
   function clearAnnotationFadeTimeout(): void {
@@ -493,6 +642,8 @@ if (
     arrowsSvg.style.display = "none";
     groupBracesSvg.style.display = "none";
     arcSvg.style.display = "none";
+    alignmentSvg.style.display = "none";
+    circleSvg.style.display = "none";
     currentAnnotationId = null;
   }
 
@@ -504,6 +655,8 @@ if (
       arrowsSvg.style.display = "none";
       groupBracesSvg.style.display = "none";
       arcSvg.style.display = "none";
+      alignmentSvg.style.display = "none";
+      circleSvg.style.display = "none";
       return;
     }
     // Uses the latest known note layout rather than whatever was passed in
@@ -513,7 +666,9 @@ if (
       positionUnderline(annotation, true);
       positionArrows(annotation, latestNoteBoxes, true);
       positionGroupBraces(annotation, latestNoteBoxes, true);
-      positionArc(annotation, latestNoteBoxes, true);
+      positionArcs(annotation, latestNoteBoxes, true);
+      positionAlignmentLines(annotation, true);
+      positionCircle(annotation, true);
     });
   }
 
@@ -530,7 +685,9 @@ if (
           positionUnderline(annotation, false);
           positionArrows(annotation, noteBoxes, false);
           positionGroupBraces(annotation, noteBoxes, false);
-          positionArc(annotation, noteBoxes, false);
+          positionArcs(annotation, noteBoxes, false);
+          positionAlignmentLines(annotation, false);
+          positionCircle(annotation, false);
         });
       }
       return;
@@ -612,6 +769,8 @@ if (
         return "Act II · Weight";
       case "act-3":
         return "Act III · Kit";
+      case "act-4":
+        return "Act IV · Relationship";
     }
   }
 
@@ -638,9 +797,32 @@ if (
     compare332Button.hidden = !canTriggerCompare332(exhibitionState);
   }
 
+  // Act IV's four reveal controls (EXHIBITION_FLOW.md section 9: "give it a
+  // low voice ↓", "shift the bass →", "lock ↓", "answer ↓") — same
+  // appear-only-when-invited convention as syncAct3Controls.
+  function syncAct4Controls(): void {
+    bringInBassButton.hidden = !canTriggerBringInBass(exhibitionState);
+    shiftBassButton.hidden = !canTriggerShiftBass(exhibitionState);
+    compareLockButton.hidden = !canTriggerCompareLock(exhibitionState);
+    compareAnswerButton.hidden = !canTriggerCompareAnswer(exhibitionState);
+  }
+
   function render(): void {
-    const { noteBoxes } = renderPulseScore(staffEl, rhythmState.currentPattern);
+    // The bass stave (from Act IV) is a second real VexFlow stave drawn
+    // below the drum-kit stave — the frame needs extra CSS height before
+    // renderPulseScore reads the container's clientHeight, or the bass
+    // stave's notes render past the SVG's viewport and get clipped.
+    const hasBassVoice = rhythmState.currentPattern.voices.some(
+      (voice) => voice.instrument === "bass",
+    );
+    staffFrame.classList.toggle("staff-frame-has-bass", hasBassVoice);
+    const { noteBoxes, kickNoteYs, bassNoteYs } = renderPulseScore(
+      staffEl,
+      rhythmState.currentPattern,
+    );
     latestNoteBoxes = noteBoxes;
+    latestKickNoteYs = kickNoteYs ?? [];
+    latestBassNoteYs = bassNoteYs ?? [];
     if (exhibitionState.screen === "exhibition") {
       stageEl.dataset.act = exhibitionState.act;
       stageEl.dataset.step = exhibitionState.step;
@@ -651,6 +833,7 @@ if (
     syncAnnotation(noteBoxes);
     syncFlipControl();
     syncAct3Controls();
+    syncAct4Controls();
   }
 
   const titleHandles = initTitleScreen({
@@ -688,6 +871,22 @@ if (
         onBarBoundary() {
           rhythmState = applyPendingPattern(rhythmState);
           exhibitionState = advanceBar(exhibitionState);
+          // Act IV's "final-1" step is reached purely by bar-count advance
+          // (never a click), so it's the one case pendingBassIndicesForStep
+          // needs a generic caller rather than a click handler — every other
+          // non-null step it returns is already queued by its own trigger's
+          // click handler before this callback next runs.
+          if (
+            exhibitionState.screen === "exhibition" &&
+            exhibitionState.act === "act-4" &&
+            !rhythmState.pendingPattern
+          ) {
+            const bassIndices = pendingBassIndicesForStep(exhibitionState.step);
+            if (bassIndices) {
+              const withBass = withBassIndices(rhythmState.currentPattern, bassIndices);
+              rhythmState = queuePendingPattern(rhythmState, withBass);
+            }
+          }
           render();
         },
       });
@@ -901,6 +1100,80 @@ if (
       if (kickIndices) {
         const withKicks = withKickIndices(rhythmState.currentPattern, kickIndices);
         rhythmState = queuePendingPattern(rhythmState, withKicks);
+      }
+    }
+    render();
+  });
+
+  // "Give it a low voice ↓" (EXHIBITION_FLOW.md section 9) — introduces the
+  // bass voice for the first time. Like orchestrateButton, this is a full
+  // pattern addition rather than a kick-only re-derivation, so it calls
+  // addBassVoice directly instead of going through
+  // pendingBassIndicesForStep (which deliberately excludes "bass-queued").
+  bringInBassButton.addEventListener("click", () => {
+    if (bringInBassButton.hidden || !canTriggerBringInBass(exhibitionState)) return;
+    exhibitionState = triggerBringInBass(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-4" &&
+      exhibitionState.step === "bass-queued" &&
+      !rhythmState.pendingPattern
+    ) {
+      const withBass = addBassVoice(rhythmState.currentPattern, LOCK_BASS_INDICES);
+      rhythmState = queuePendingPattern(rhythmState, withBass);
+    }
+    render();
+  });
+
+  // Act IV's three re-derivation reveals ("shift the bass →", "lock ↓",
+  // "answer ↓") — each re-derives only the bass voice on the already-present
+  // bass staff, same shape as compareBasicButton/compare332Button.
+  shiftBassButton.addEventListener("click", () => {
+    if (shiftBassButton.hidden || !canTriggerShiftBass(exhibitionState)) return;
+    exhibitionState = triggerShiftBass(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-4" &&
+      !rhythmState.pendingPattern
+    ) {
+      const bassIndices = pendingBassIndicesForStep(exhibitionState.step);
+      if (bassIndices) {
+        const withBass = withBassIndices(rhythmState.currentPattern, bassIndices);
+        rhythmState = queuePendingPattern(rhythmState, withBass);
+      }
+    }
+    render();
+  });
+
+  compareLockButton.addEventListener("click", () => {
+    if (compareLockButton.hidden || !canTriggerCompareLock(exhibitionState)) return;
+    exhibitionState = triggerCompareLock(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-4" &&
+      !rhythmState.pendingPattern
+    ) {
+      const bassIndices = pendingBassIndicesForStep(exhibitionState.step);
+      if (bassIndices) {
+        const withBass = withBassIndices(rhythmState.currentPattern, bassIndices);
+        rhythmState = queuePendingPattern(rhythmState, withBass);
+      }
+    }
+    render();
+  });
+
+  compareAnswerButton.addEventListener("click", () => {
+    if (compareAnswerButton.hidden || !canTriggerCompareAnswer(exhibitionState)) return;
+    exhibitionState = triggerCompareAnswer(exhibitionState);
+    if (
+      exhibitionState.screen === "exhibition" &&
+      exhibitionState.act === "act-4" &&
+      !rhythmState.pendingPattern
+    ) {
+      const bassIndices = pendingBassIndicesForStep(exhibitionState.step);
+      if (bassIndices) {
+        const withBass = withBassIndices(rhythmState.currentPattern, bassIndices);
+        rhythmState = queuePendingPattern(rhythmState, withBass);
       }
     }
     render();

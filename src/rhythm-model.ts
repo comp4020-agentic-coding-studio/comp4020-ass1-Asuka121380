@@ -1,5 +1,4 @@
-export type Instrument = "practice-pad" | "hihat-closed" | "snare" | "kick";
-// Extension seam for Act IV onward: | "bass"
+export type Instrument = "practice-pad" | "hihat-closed" | "snare" | "kick" | "bass";
 
 export type EighthIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -13,7 +12,7 @@ export interface NoteEvent {
 
 export interface VoicePattern {
   readonly instrument: Instrument;
-  readonly clef: "percussion";
+  readonly clef: "percussion" | "bass";
   readonly slots: readonly NoteEvent[];
 }
 
@@ -128,6 +127,14 @@ export const SYNCOPATED_KICK_INDICES: readonly EighthIndex[] = [
   BEAT_FOUR_INDEX,
 ];
 
+// Act IV's bass voice (EXHIBITION_FLOW.md section 9): the "lock" position
+// mirrors the kick's finished 3-3-2 groove exactly (the bass locks in with
+// the kick), then the "answer" position shifts every one of those three
+// attacks one eighth note later, so bass leans just behind the kick instead
+// of landing with it.
+export const LOCK_BASS_INDICES: readonly EighthIndex[] = SYNCOPATED_KICK_INDICES;
+export const ANSWER_BASS_INDICES: readonly EighthIndex[] = [1, 4, 7];
+
 function drumVoiceSlots(
   instrument: Instrument,
   activeAt: (index: EighthIndex) => boolean,
@@ -201,6 +208,44 @@ export function withKickIndices(
   );
 
   return { ...pattern, id: `${pattern.id}-kick`, voices };
+}
+
+// Act IV's "bring in the bass" reveal (EXHIBITION_FLOW.md section 9): adds a
+// new bass-clef voice to an existing drum-kit pattern, written at the given
+// indices — used exactly once, at the moment the bass first appears, the way
+// createDrumKitPattern is used once at Act III's "orchestrate the pulse."
+export function addBassVoice(
+  pattern: RhythmPattern,
+  bassIndices: readonly EighthIndex[],
+): RhythmPattern {
+  const bassSet = new Set<EighthIndex>(bassIndices);
+  const bassVoice: VoicePattern = {
+    instrument: "bass",
+    clef: "bass",
+    slots: drumVoiceSlots("bass", (index) => bassSet.has(index)),
+  };
+
+  return { ...pattern, id: `${pattern.id}-bass`, voices: [...pattern.voices, bassVoice] };
+}
+
+// Re-derives an existing bass voice at a new set of indices, leaving every
+// other voice untouched — mirrors withKickIndices exactly, used for the
+// "shift the bass" move and for restoring the locked position afterward.
+export function withBassIndices(
+  pattern: RhythmPattern,
+  bassIndices: readonly EighthIndex[],
+): RhythmPattern {
+  const bassSet = new Set<EighthIndex>(bassIndices);
+  const voices = pattern.voices.map((voice) =>
+    voice.instrument === "bass"
+      ? {
+          ...voice,
+          slots: drumVoiceSlots("bass", (index) => bassSet.has(index)),
+        }
+      : voice,
+  );
+
+  return { ...pattern, id: `${pattern.id}-bass`, voices };
 }
 
 export function activeInstruments(pattern: RhythmPattern): Instrument[] {

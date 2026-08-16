@@ -7,11 +7,13 @@ import {
   BASIC_KICK_INDICES,
   OFFBEAT_KICK_INDICES,
   SYNCOPATED_KICK_INDICES,
+  LOCK_BASS_INDICES,
+  ANSWER_BASS_INDICES,
   type EighthIndex,
 } from "./rhythm-model";
 
-export type ActId = "act-1" | "act-2" | "act-3";
-// Extension seam for later passes: | "act-4" | "act-5"
+export type ActId = "act-1" | "act-2" | "act-3" | "act-4";
+// Extension seam for later passes: | "act-5"
 
 export type Act1Step =
   | "listening"
@@ -66,6 +68,34 @@ export type Act3Step =
   | "compare-332-listening"
   | "settled";
 
+// Act IV (EXHIBITION_FLOW.md section 9): "bass-queued"/"answer-queued"/
+// "compare-lock-queued"/"compare-answer-queued" are the same queue-then-
+// apply-at-bar-boundary steps established by Act I's "queued", Act II's
+// "flip-queued", and Act III's "kit-queued". The required closing comparison
+// again mirrors Act III's compare-basic/compare-332 shape, but its second
+// half ("final-1") must force the bass back to its locked position before
+// Act V opens — see pendingBassIndicesForStep.
+export type Act4Step =
+  | "annotation-1"
+  | "bass-queued"
+  | "lock-listening"
+  | "annotation-2"
+  | "annotation-2b"
+  | "annotation-3"
+  | "answer-queued"
+  | "answer-listening"
+  | "annotation-4"
+  | "annotation-4b"
+  | "compare-prompt-lock"
+  | "compare-lock-queued"
+  | "compare-lock-listening"
+  | "compare-prompt-answer"
+  | "compare-answer-queued"
+  | "compare-answer-listening"
+  | "final-1"
+  | "final-2"
+  | "settled";
+
 export interface TitleScreen {
   readonly screen: "title";
 }
@@ -92,7 +122,14 @@ export interface Act3Screen {
   readonly barsInStep: number;
 }
 
-export type ExhibitionScreen = Act1Screen | Act2Screen | Act3Screen;
+export interface Act4Screen {
+  readonly screen: "exhibition";
+  readonly act: "act-4";
+  readonly step: Act4Step;
+  readonly barsInStep: number;
+}
+
+export type ExhibitionScreen = Act1Screen | Act2Screen | Act3Screen | Act4Screen;
 
 export type ExhibitionState = TitleScreen | ExhibitionScreen;
 
@@ -133,6 +170,14 @@ const ACT3_SHORT_HOLD = 1;
 const ACT3_BARS_TEMP_PATTERN = 2;
 const ACT3_BARS_BEFORE_ANNOTATION_5 = 2;
 
+// Act IV's own pacing (EXHIBITION_FLOW.md section 9): "after two bars" once
+// the bass locks in mirrors Act III's own two-bar settle-in, every other
+// scripted beat uses the same 1-bar short hold, and the "answer" position
+// gets its own two-bar listening hold before the next annotation.
+const ACT4_BARS_BEFORE_ANNOTATION_2 = 2;
+const ACT4_SHORT_HOLD = 1;
+const ACT4_BARS_ANSWER_LISTENING = 2;
+
 export function startExhibition(): ExhibitionState {
   return {
     screen: "exhibition",
@@ -160,6 +205,17 @@ function startAct3(): ExhibitionState {
   return {
     screen: "exhibition",
     act: "act-3",
+    step: "annotation-1",
+    barsInStep: 0,
+  };
+}
+
+// Annotation 1 fires immediately once Act III settles, exactly the same
+// hand-off shape startAct3 uses from Act II.
+function startAct4(): ExhibitionState {
+  return {
+    screen: "exhibition",
+    act: "act-4",
     step: "annotation-1",
     barsInStep: 0,
   };
@@ -294,7 +350,82 @@ export function advanceBar(state: ExhibitionState): ExhibitionState {
           ? { ...state, step: "settled", barsInStep: 0 }
           : { ...state, barsInStep };
       case "settled":
-        // Extension seam for Act IV (Milestone 4).
+        return startAct4();
+    }
+  }
+
+  if (state.act === "act-4") {
+    switch (state.step) {
+      case "annotation-1":
+        // Waits on triggerBringInBass(), not on bar count.
+        return { ...state, barsInStep };
+      case "bass-queued":
+        // Any bar boundary while queued applies the new bass voice (main.ts)
+        // and begins the locked-position listening hold.
+        return { ...state, step: "lock-listening", barsInStep: 0 };
+      case "lock-listening":
+        return barsInStep >= ACT4_BARS_BEFORE_ANNOTATION_2
+          ? { ...state, step: "annotation-2", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-2":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "annotation-2b", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-2b":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "annotation-3", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-3":
+        // Waits on triggerShiftBass(), not on bar count.
+        return { ...state, barsInStep };
+      case "answer-queued":
+        // Applies the shifted "answer" bass pattern and begins its own
+        // listening hold.
+        return { ...state, step: "answer-listening", barsInStep: 0 };
+      case "answer-listening":
+        return barsInStep >= ACT4_BARS_ANSWER_LISTENING
+          ? { ...state, step: "annotation-4", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-4":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "annotation-4b", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "annotation-4b":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "compare-prompt-lock", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "compare-prompt-lock":
+        // Waits on triggerCompareLock(), not on bar count.
+        return { ...state, barsInStep };
+      case "compare-lock-queued":
+        return { ...state, step: "compare-lock-listening", barsInStep: 0 };
+      case "compare-lock-listening":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "compare-prompt-answer", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "compare-prompt-answer":
+        // Waits on triggerCompareAnswer(), not on bar count.
+        return { ...state, barsInStep };
+      case "compare-answer-queued":
+        return { ...state, step: "compare-answer-listening", barsInStep: 0 };
+      case "compare-answer-listening":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "final-1", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-1":
+        // Any bar boundary while here restores the bass to its locked
+        // position (pendingBassIndicesForStep("final-1"), applied
+        // automatically by main.ts's onBarBoundary) — EXHIBITION_FLOW.md
+        // section 9 requires the groove to return to "lock" before Act V.
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "final-2", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "final-2":
+        return barsInStep >= ACT4_SHORT_HOLD
+          ? { ...state, step: "settled", barsInStep: 0 }
+          : { ...state, barsInStep };
+      case "settled":
+        // Extension seam for Act V (Milestone 5).
         return state;
     }
   }
@@ -529,6 +660,100 @@ export function pendingKickIndicesForStep(
       return BASIC_KICK_INDICES;
     case "compare-332-queued":
       return SYNCOPATED_KICK_INDICES;
+    default:
+      return null;
+  }
+}
+
+// Annotation 1's "bring in the bass" reveal button (EXHIBITION_FLOW.md
+// section 9) — a one-shot activation, mirroring Act III's
+// canTriggerOrchestrate/triggerOrchestrate exactly.
+export function canTriggerBringInBass(state: ExhibitionState): boolean {
+  return (
+    state.screen === "exhibition" &&
+    state.act === "act-4" &&
+    state.step === "annotation-1"
+  );
+}
+
+export function triggerBringInBass(state: ExhibitionState): ExhibitionState {
+  if (!canTriggerBringInBass(state) || state.screen !== "exhibition" || state.act !== "act-4") {
+    return state;
+  }
+  return { ...state, step: "bass-queued", barsInStep: 0 };
+}
+
+// Annotation 3's "shift the bass" reveal button — moves each locked bass
+// attack one eighth note later (EXHIBITION_FLOW.md section 9).
+export function canTriggerShiftBass(state: ExhibitionState): boolean {
+  return (
+    state.screen === "exhibition" &&
+    state.act === "act-4" &&
+    state.step === "annotation-3"
+  );
+}
+
+export function triggerShiftBass(state: ExhibitionState): ExhibitionState {
+  if (!canTriggerShiftBass(state) || state.screen !== "exhibition" || state.act !== "act-4") {
+    return state;
+  }
+  return { ...state, step: "answer-queued", barsInStep: 0 };
+}
+
+// The required closing comparison's two named controls (EXHIBITION_FLOW.md
+// section 9: "Temporarily reveal: lock, answer"). Each is live only at its
+// own prompt step, mirroring Act III's compare-basic/compare-332 gating.
+export function canTriggerCompareLock(state: ExhibitionState): boolean {
+  return (
+    state.screen === "exhibition" &&
+    state.act === "act-4" &&
+    state.step === "compare-prompt-lock"
+  );
+}
+
+export function canTriggerCompareAnswer(state: ExhibitionState): boolean {
+  return (
+    state.screen === "exhibition" &&
+    state.act === "act-4" &&
+    state.step === "compare-prompt-answer"
+  );
+}
+
+export function triggerCompareLock(state: ExhibitionState): ExhibitionState {
+  if (!canTriggerCompareLock(state) || state.screen !== "exhibition" || state.act !== "act-4") {
+    return state;
+  }
+  return { ...state, step: "compare-lock-queued", barsInStep: 0 };
+}
+
+export function triggerCompareAnswer(state: ExhibitionState): ExhibitionState {
+  if (!canTriggerCompareAnswer(state) || state.screen !== "exhibition" || state.act !== "act-4") {
+    return state;
+  }
+  return { ...state, step: "compare-answer-queued", barsInStep: 0 };
+}
+
+// Which bass-voice indices a queued Act IV step applies once its bar
+// boundary lands — main.ts uses this the same lockstep way
+// pendingKickIndicesForStep drives Act III. "final-1" is the one case that
+// isn't reached via a click handler: main.ts's onBarBoundary queues it
+// automatically on entering that step, forcing the bass back to its locked
+// position before Act V can open (EXHIBITION_FLOW.md section 9).
+// "bass-queued" is deliberately excluded — main.ts's own click handler calls
+// addBassVoice(...) directly, the same way "kit-queued" is excluded here and
+// handled via createDrumKitPattern in Act III's click handler.
+export function pendingBassIndicesForStep(
+  step: Act4Step,
+): readonly EighthIndex[] | null {
+  switch (step) {
+    case "answer-queued":
+      return ANSWER_BASS_INDICES;
+    case "compare-lock-queued":
+      return LOCK_BASS_INDICES;
+    case "compare-answer-queued":
+      return ANSWER_BASS_INDICES;
+    case "final-1":
+      return LOCK_BASS_INDICES;
     default:
       return null;
   }

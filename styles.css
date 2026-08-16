@@ -293,12 +293,20 @@ nav {
   margin: clamp(3.5rem, 9vh, 5rem) 0;
 }
 
+/* From Act IV, a second real bass-clef stave draws below the drum-kit
+   stave — taller than the single-stave frame above, so the SVG viewport
+   doesn't clip the lower stave's noteheads. */
+.staff-frame.staff-frame-has-bass {
+  height: clamp(340px, 42vh, 460px);
+}
+
 .staff,
 .hit-targets,
 .annotation-layer,
 .annotation-arrows,
 .annotation-group-braces,
 .annotation-arc,
+.annotation-alignment-lines,
 .beat-labels {
   position: absolute;
   inset: 0;
@@ -309,6 +317,7 @@ nav {
 .annotation-arrows,
 .annotation-group-braces,
 .annotation-arc,
+.annotation-alignment-lines,
 .beat-labels {
   pointer-events: none;
 }
@@ -462,6 +471,46 @@ nav {
   transform: rotate(-1.1deg);
 }
 
+.annotation-note[data-annotation-id="act4-annotation-1"] {
+  transform: rotate(-0.9deg);
+}
+
+.annotation-note[data-annotation-id="act4-annotation-2"] {
+  transform: rotate(1deg);
+}
+
+.annotation-note[data-annotation-id="act4-annotation-2b"] {
+  transform: rotate(-0.7deg);
+}
+
+.annotation-note[data-annotation-id="act4-annotation-3"] {
+  transform: rotate(1.1deg);
+}
+
+.annotation-note[data-annotation-id="act4-annotation-4"] {
+  transform: rotate(-1deg);
+}
+
+.annotation-note[data-annotation-id="act4-annotation-4b"] {
+  transform: rotate(0.8deg);
+}
+
+.annotation-note[data-annotation-id="act4-compare-lock"] {
+  transform: rotate(-1.1deg);
+}
+
+.annotation-note[data-annotation-id="act4-compare-answer"] {
+  transform: rotate(1.1deg);
+}
+
+.annotation-note[data-annotation-id="act4-final-1"] {
+  transform: rotate(-0.85deg);
+}
+
+.annotation-note[data-annotation-id="act4-final-2"] {
+  transform: rotate(0.9deg);
+}
+
 /* annotation-2's three words carry their own per-line rotation instead
    (offsetLines), so the container itself stays untransformed. */
 
@@ -568,6 +617,28 @@ nav {
   transition: stroke-dashoffset 600ms ease;
 }
 
+.annotation-alignment-line-path {
+  fill: none;
+  stroke: var(--graphite);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 500ms ease;
+}
+
+.annotation-circle {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+.annotation-circle-path {
+  fill: none;
+  stroke: var(--pencil-blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 650ms ease;
+}
+
 .beat-label {
   position: absolute;
   transform: translate(-50%, 0.3rem);
@@ -671,10 +742,14 @@ nav {
 }
 
 /* Same understated temporary-control convention as .flip-accents — live only
-   at the specific Act III step each button corresponds to. */
+   at the specific Act III/IV step each button corresponds to. */
 .orchestrate-kit,
 .compare-basic,
-.compare-332 {
+.compare-332,
+.bring-in-bass,
+.shift-bass,
+.compare-lock,
+.compare-answer {
   min-width: 44px;
   min-height: 44px;
   padding: 0.4rem 0.9rem;
@@ -690,7 +765,11 @@ nav {
 
 .orchestrate-kit[hidden],
 .compare-basic[hidden],
-.compare-332[hidden] {
+.compare-332[hidden],
+.bring-in-bass[hidden],
+.shift-bass[hidden],
+.compare-lock[hidden],
+.compare-answer[hidden] {
   display: none;
 }
 
@@ -699,13 +778,25 @@ nav {
 .compare-basic:hover,
 .compare-basic:focus-visible,
 .compare-332:hover,
-.compare-332:focus-visible {
+.compare-332:focus-visible,
+.bring-in-bass:hover,
+.bring-in-bass:focus-visible,
+.shift-bass:hover,
+.shift-bass:focus-visible,
+.compare-lock:hover,
+.compare-lock:focus-visible,
+.compare-answer:hover,
+.compare-answer:focus-visible {
   color: var(--ink);
 }
 
 .orchestrate-kit:focus-visible,
 .compare-basic:focus-visible,
-.compare-332:focus-visible {
+.compare-332:focus-visible,
+.bring-in-bass:focus-visible,
+.shift-bass:focus-visible,
+.compare-lock:focus-visible,
+.compare-answer:focus-visible {
   outline: 2px dashed var(--ink);
   outline-offset: 2px;
 }
@@ -714,6 +805,10 @@ nav {
   .staff-frame {
     height: clamp(110px, 20vh, 170px);
     margin: clamp(3rem, 11vh, 4rem) 0;
+  }
+
+  .staff-frame.staff-frame-has-bass {
+    height: clamp(280px, 51vh, 430px);
   }
 
   .annotation-note {
@@ -756,6 +851,8 @@ nav {
   .annotation-arrow-path,
   .annotation-brace-path,
   .annotation-arc-path,
+  .annotation-alignment-line-path,
+  .annotation-circle-path,
   .beat-target::before {
     transition: none;
   }
@@ -775,6 +872,8 @@ html.reduced-motion .annotation-underline-path,
 html.reduced-motion .annotation-arrow-path,
 html.reduced-motion .annotation-brace-path,
 html.reduced-motion .annotation-arc-path,
+html.reduced-motion .annotation-alignment-line-path,
+html.reduced-motion .annotation-circle-path,
 html.reduced-motion .beat-target::before {
   transition: none;
 }

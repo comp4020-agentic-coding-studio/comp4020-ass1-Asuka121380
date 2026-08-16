@@ -261,9 +261,13 @@ describe("exhibition state — Act III bar-boundary sequence", () => {
     expect(state.step).toBe("settled");
   });
 
-  it("settled holds — no Act IV wiring exists yet", () => {
+  it("settled hands off directly into Act IV's opening annotation-1", () => {
     const settled = advanceBar(reachCompare332Listening());
-    expect(advanceBar(settled)).toEqual(settled);
+    const nextAct = advanceBar(settled);
+    if (nextAct.screen !== "exhibition") throw new Error("unreachable");
+    expect(nextAct.act).toBe("act-4");
+    expect(nextAct.step).toBe("annotation-1");
+    expect(nextAct.barsInStep).toBe(0);
   });
 });
 
@@ -334,8 +338,9 @@ describe("annotations — Act III", () => {
     const annotation = annotationForStep(state);
     expect(annotation?.id).toBe("act3-annotation-3");
     expect(annotation?.arrowTargets).toEqual([OFFBEAT_AFTER_BEAT_TWO_INDEX]);
-    expect(annotation?.arcFrom).toBe(BEAT_THREE_INDEX);
-    expect(annotation?.arcTo).toBe(OFFBEAT_AFTER_BEAT_TWO_INDEX);
+    expect(annotation?.arcs).toEqual([
+      { from: BEAT_THREE_INDEX, to: OFFBEAT_AFTER_BEAT_TWO_INDEX },
+    ]);
   });
 
   it("shows annotation-4 with an arrow to beat 4", () => {
